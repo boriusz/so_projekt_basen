@@ -1,49 +1,121 @@
 #include "pool.h"
-#include <iostream>
-#include <numeric>
+#include <sys/sem.h>
+#include <cstring>
 
-Pool::Pool(const std::string& variant, int capacity, int minAge, int maxAge,
+Pool::Pool(int type, const std::string& variant, int capacity, int minAge, int maxAge,
            double maxAverageAge, bool needsSupervision)
-        : variant(variant), capacity(capacity), minAge(minAge), maxAge(maxAge),
-          currentSwimmers(0), maxAverageAge(maxAverageAge),
-          needsSupervision(needsSupervision) {}
+        : poolType(type), variant(variant), capacity(capacity), minAge(minAge), maxAge(maxAge),
+          maxAverageAge(maxAverageAge), needsSupervision(needsSupervision) {
+
+    shmId = shmget(SHM_KEY, sizeof(SharedMemory), 0666);
+    if (shmId < 0) {
+        perror("shmget");
+        exit(1);
+    }
+
+    SharedMemory* shm = (SharedMemory*)shmat(shmId, nullptr, 0);
+    if (shm == (void*)-1) {
+        perror("shmat");
+        exit(1);
+    }
+
+    switch(poolType) {
+        case 0: state = &shm->olympic; break;
+        case 1: state = &shm->recreational; break;
+        case 2: state = &shm->kids; break;
+    }
+
+    semId = semget(SEM_KEY, SEM_COUNT, 0666);
+    if (semId < 0) {
+        perror("semget");
+        exit(1);
+    }
+}
+
+Pool::~Pool() {
+    if (shmdt(state) == -1) {
+        perror("shmdt");
+    }
+}
+
+void Pool::lock() {
+    struct sembuf op = {(unsigned short)poolType, -1, 0};
+    if (semop(semId, &op, 1) == -1) {
+        perror("semop lock");
+        exit(1);
+    }
+}
+
+void Pool::unlock() {
+    struct sembuf op = {(unsigned short)poolType, 1, 0};
+    if (semop(semId, &op, 1) == -1) {
+        perror("semop unlock");
+        exit(1);
+    }
+}
 
 bool Pool::enter(int age, bool hasGuardian, bool hasSwimDiaper) {
-    std::lock_guard<std::mutex> lock(mtx);
-
-    if (currentSwimmers >= capacity) return false;
     if (age < minAge || age > maxAge) return false;
 
-    if (variant == "children") {
-        if (age <= 3 && !hasSwimDiaper) return false;
-        if (age > 5 && !hasGuardian) return false;
+    lock();
+    if (state->isClosed || state->currentCount >= capacity) {
+        unlock();
+        return false;
     }
 
-    if (age < 10 && !hasGuardian && needsSupervision) return false;
+    if (variant == "children") {
+        if (age <= 3 && !hasSwimDiaper) {
+            unlock();
+            return false;
+        }
+        if (age > 5 && !hasGuardian) {
+            unlock();
+            return false;
+        }
+    }
+
+    if (age < 10 && !hasGuardian && needsSupervision) {
+        unlock();
+        return false;
+    }
 
     if (maxAverageAge > 0) {
-        double newAverage = getCurrentAverageAge() * currentSwimmers + age;
-        newAverage /= (currentSwimmers + 1);
-        if (newAverage > maxAverageAge) return false;
+        double newAverage = getCurrentAverageAge() * state->currentCount + age;
+        newAverage /= (state->currentCount + 1);
+        if (newAverage > maxAverageAge) {
+            unlock();
+            return false;
+        }
     }
 
-    currentAges.push_back(age);
-    currentSwimmers++;
+    state->ages[state->currentCount++] = age;
+    unlock();
     return true;
 }
 
 void Pool::leave(int age) {
-    std::lock_guard<std::mutex> lock(mtx);
-    if (currentSwimmers > 0) {
-        auto it = std::find(currentAges.begin(), currentAges.end(), age);
-        if (it != currentAges.end()) {
-            currentAges.erase(it);
-            currentSwimmers--;
+    lock();
+
+    for (int i = 0; i < state->currentCount; i++) {
+        if (state->ages[i] == age) {
+            state->ages[i] = state->ages[--state->currentCount];
+            break;
         }
     }
+
+    unlock();
+}
+
+bool Pool::isEmpty() const {
+    return state->currentCount == 0;
 }
 
 double Pool::getCurrentAverageAge() const {
-    if (currentAges.empty()) return 0;
-    return std::accumulate(currentAges.begin(), currentAges.end(), 0.0) / currentAges.size();
+    if (state->currentCount == 0) return 0;
+
+    int sum = 0;
+    for (int i = 0; i < state->currentCount; i++) {
+        sum += state->ages[i];
+    }
+    return static_cast<double>(sum) / state->currentCount;
 }

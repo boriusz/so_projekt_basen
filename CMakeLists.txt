@@ -13,6 +13,7 @@ add_executable(swimming_pool
         src/lifeguard/lifeguard.h
         src/client/client.cpp
         src/client/client.h
+        src/common/shared_memory.h
 )
 
 target_include_directories(swimming_pool PRIVATE
@@ -20,6 +21,7 @@ target_include_directories(swimming_pool PRIVATE
         src/pool
         src/lifeguard
         src/client
+        src/common
 )
 
 target_link_libraries(swimming_pool PRIVATE pthread)

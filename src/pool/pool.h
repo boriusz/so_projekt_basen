@@ -7,28 +7,34 @@
 #include <vector>
 #include <numeric>
 #include <algorithm>
-
+#include "shared_memory.h"
 
 class Pool {
 private:
+    int shmId;
+    int semId;
+    PoolState* state;
+    int poolType;
     std::string variant;
     int capacity;
     int minAge;
     int maxAge;
-    int currentSwimmers;
-    std::mutex mtx;
-    std::vector<int> currentAges;
     double maxAverageAge;
     bool needsSupervision;
 
+    void lock();
+    void unlock();
+
 public:
-    Pool(const std::string& variant, int capacity, int minAge, int maxAge,
+    Pool(int type, const std::string& variant, int capacity, int minAge, int maxAge,
          double maxAverageAge = 0, bool needsSupervision = false);
+    ~Pool();
+
     bool enter(int age, bool hasGuardian = false, bool hasSwimDiaper = false);
     void leave(int age);
     double getCurrentAverageAge() const;
+    bool isEmpty() const;
     std::string getVariant() const { return variant; }
-    bool isEmpty() const { return currentSwimmers == 0; }
 };
 
 #endif //SO_PROJEKT_BASEN_POOL_H
