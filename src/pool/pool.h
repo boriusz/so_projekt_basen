@@ -10,12 +10,17 @@
 #include "shared_memory.h"
 
 class Pool {
+public:
+    enum class PoolType {
+        Olympic = 0,
+        Recreational = 1,
+        Children = 2
+    };
 private:
     int shmId;
     int semId;
-    PoolState* state;
-    int poolType;
-    std::string variant;
+    PoolState *state;
+    PoolType poolType;
     int capacity;
     int minAge;
     int maxAge;
@@ -23,18 +28,24 @@ private:
     bool needsSupervision;
 
     void lock();
+
     void unlock();
 
 public:
-    Pool(int type, const std::string& variant, int capacity, int minAge, int maxAge,
+
+    Pool(PoolType poolType, int capacity, int minAge, int maxAge,
          double maxAverageAge = 0, bool needsSupervision = false);
+
     ~Pool();
 
-    bool enter(int age, bool hasGuardian = false, bool hasSwimDiaper = false);
-    void leave(int age);
+    bool enter(Client client);
+
+    void leave(int clientId);
+
     double getCurrentAverageAge() const;
+
     bool isEmpty() const;
-    std::string getVariant() const { return variant; }
 };
 
 #endif //SO_PROJEKT_BASEN_POOL_H
+

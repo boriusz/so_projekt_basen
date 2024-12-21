@@ -2,9 +2,9 @@
 #include <sys/sem.h>
 #include <cstring>
 
-Pool::Pool(int type, const std::string& variant, int capacity, int minAge, int maxAge,
+Pool::Pool(Pool::PoolType poolType, int capacity, int minAge, int maxAge,
            double maxAverageAge, bool needsSupervision)
-        : poolType(type), variant(variant), capacity(capacity), minAge(minAge), maxAge(maxAge),
+        : poolType(poolType), capacity(capacity), minAge(minAge), maxAge(maxAge),
           maxAverageAge(maxAverageAge), needsSupervision(needsSupervision) {
 
     shmId = shmget(SHM_KEY, sizeof(SharedMemory), 0666);
@@ -13,16 +13,22 @@ Pool::Pool(int type, const std::string& variant, int capacity, int minAge, int m
         exit(1);
     }
 
-    SharedMemory* shm = (SharedMemory*)shmat(shmId, nullptr, 0);
-    if (shm == (void*)-1) {
+    SharedMemory *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
+    if (shm == (void *) -1) {
         perror("shmat");
         exit(1);
     }
 
-    switch(poolType) {
-        case 0: state = &shm->olympic; break;
-        case 1: state = &shm->recreational; break;
-        case 2: state = &shm->kids; break;
+    switch (poolType) {
+        case PoolType::Olympic:
+            state = &shm->olympic;
+            break;
+        case PoolType::Recreational:
+            state = &shm->recreational;
+            break;
+        case PoolType::Children:
+            state = &shm->kids;
+            break;
     }
 
     semId = semget(SEM_KEY, SEM_COUNT, 0666);
@@ -39,7 +45,7 @@ Pool::~Pool() {
 }
 
 void Pool::lock() {
-    struct sembuf op = {(unsigned short)poolType, -1, 0};
+    struct sembuf op = {(unsigned short) poolType, -1, 0};
     if (semop(semId, &op, 1) == -1) {
         perror("semop lock");
         exit(1);
@@ -47,40 +53,41 @@ void Pool::lock() {
 }
 
 void Pool::unlock() {
-    struct sembuf op = {(unsigned short)poolType, 1, 0};
+    struct sembuf op = {(unsigned short) poolType, 1, 0};
     if (semop(semId, &op, 1) == -1) {
         perror("semop unlock");
         exit(1);
     }
 }
 
-bool Pool::enter(int age, bool hasGuardian, bool hasSwimDiaper) {
-    if (age < minAge || age > maxAge) return false;
+bool Pool::enter(Client client) {
+    if (client.getAge() < minAge || client.getAge() > maxAge) return false;
 
     lock();
+
     if (state->isClosed || state->currentCount >= capacity) {
         unlock();
         return false;
     }
 
-    if (variant == "children") {
-        if (age <= 3 && !hasSwimDiaper) {
+    if (poolType == PoolType::Children) {
+        if (client.getAge() <= 3 && !client.getHasSwimDiaper()) {
             unlock();
             return false;
         }
-        if (age > 5 && !hasGuardian) {
+        if (client.getAge() > 5 && !client.getHasGuardian()) {
             unlock();
             return false;
         }
     }
 
-    if (age < 10 && !hasGuardian && needsSupervision) {
+    if (client.getAge() < 10 && !client.getHasGuardian() && needsSupervision) {
         unlock();
         return false;
     }
 
     if (maxAverageAge > 0) {
-        double newAverage = getCurrentAverageAge() * state->currentCount + age;
+        double newAverage = getCurrentAverageAge() * state->currentCount + client.getAge();
         newAverage /= (state->currentCount + 1);
         if (newAverage > maxAverageAge) {
             unlock();
@@ -88,17 +95,25 @@ bool Pool::enter(int age, bool hasGuardian, bool hasSwimDiaper) {
         }
     }
 
-    state->ages[state->currentCount++] = age;
+    state->clients[state->currentCount++] = &client;
     unlock();
     return true;
 }
 
-void Pool::leave(int age) {
+void Pool::leave(int clientId) {
     lock();
 
     for (int i = 0; i < state->currentCount; i++) {
-        if (state->ages[i] == age) {
-            state->ages[i] = state->ages[--state->currentCount];
+        if (state->clients[i]->getId() == clientId) {
+            if (state->clients[i]->getGuardianId() == -1) {
+                for (int j = 0; j < state->currentCount; j++) {
+                    if (state->clients[j]->getGuardianId() == clientId) {
+                        state->clients[j] = state->clients[--state->currentCount];
+                        j--;
+                    }
+                }
+            }
+            state->clients[i] = state->clients[--state->currentCount];
             break;
         }
     }
@@ -115,7 +130,7 @@ double Pool::getCurrentAverageAge() const {
 
     int sum = 0;
     for (int i = 0; i < state->currentCount; i++) {
-        sum += state->ages[i];
+        sum += state->clients[i]->getAge();
     }
     return static_cast<double>(sum) / state->currentCount;
 }

@@ -6,10 +6,11 @@
 #include <sys/shm.h>
 #include <sys/sem.h>
 #include <sys/msg.h>
+#include "client.h"
 
 struct PoolState {
+    Client* clients[100];
     int currentCount;
-    int ages[100];
     bool isClosed;
 };
 
