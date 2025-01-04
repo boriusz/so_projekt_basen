@@ -53,7 +53,8 @@ void initializeIPC() {
 pid_t createLifeguard(Pool::PoolType poolType) {
     pid_t pid = fork();
     if (pid == 0) {
-        Lifeguard lifeguard(poolType);
+        Pool *pool = PoolManager::getInstance()->getPool(poolType);
+        Lifeguard lifeguard(pool);
         lifeguard.run();
         exit(0);
     }
@@ -65,6 +66,30 @@ pid_t createCashier() {
     if (pid == 0) {
         Cashier cashier;
         cashier.run();
+        exit(0);
+    }
+    return pid;
+}
+
+pid_t createClientWithPossibleDependent(int& clientId) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        int age = rand() % 70 + 1;
+        bool isVip = (rand() % 100 < 10);
+
+        Client* client = new Client(clientId++, age, isVip);
+
+        if (age >= 18 && (rand() % 100 < 30)) {
+            int numChildren = rand() % 3 + 1;
+            for (int i = 0; i < numChildren; i++) {
+                int childAge = rand() % 10;
+                bool needsDiaper = childAge <= 3;
+                Client* child = new Client(clientId++, childAge, isVip, needsDiaper, true);
+                client->addDependent(child);
+            }
+        }
+
+        client->run();
         exit(0);
     }
     return pid;
@@ -89,19 +114,8 @@ int main() {
     int clientId = 1;
     while (true) {
         if (rand() % 100 < 30) {
-            int age = rand() % 70 + 1;
-            bool isVip = (rand() % 100 < 10);
-
-            pid_t pid = fork();
-            if (pid == 0) {
-                Client client(clientId, age, isVip);
-                client.run();
-                exit(0);
-            }
-            processes.push_back(pid);
-            clientId++;
+            processes.push_back(createClientWithPossibleDependent(clientId));
         }
-
         sleep(1);
     }
 
