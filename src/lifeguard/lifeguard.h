@@ -8,7 +8,7 @@
 
 class Lifeguard {
 private:
-    Pool& pool;
+    Pool* pool;
     std::atomic<bool> poolClosed;
     int msgId;
 
@@ -16,7 +16,7 @@ private:
     void waitForEmptyPool();
 
 public:
-    Lifeguard(Pool& pool);
+    Lifeguard(Pool::PoolType pool);
     ~Lifeguard();
 
     void run();

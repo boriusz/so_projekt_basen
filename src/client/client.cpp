@@ -1,5 +1,6 @@
 #include "client.h"
 #include "shared_memory.h"
+#include "pool_manager.h"
 #include <iostream>
 #include <sys/msg.h>
 #include <unistd.h>
@@ -41,23 +42,22 @@ void Client::handleLifeguardSignal() {
 }
 
 void Client::moveToAnotherPool() {
-    Pool *newPool = nullptr;
+    Pool* newPool = nullptr;
+    auto poolManager = PoolManager::getInstance();
 
     if (age <= 5) {
-        newPool = new Pool(Pool::PoolType::Children, 100, 0, 5);
+        newPool = poolManager->getPool(Pool::PoolType::Children);
     } else if (age < 18) {
-        newPool = new Pool(Pool::PoolType::Recreational, 100, 0, 70);
+        newPool = poolManager->getPool(Pool::PoolType::Recreational);
     } else {
-        newPool = new Pool(Pool::PoolType::Olympic, 100, 18, 70);
+        newPool = poolManager->getPool(Pool::PoolType::Olympic);
     }
 
-    if (newPool->enter(*this)) {
+    if (newPool && newPool->enter(*this)) {
         currentPool = newPool;
-        for (auto dependent: dependents) {
+        for (auto dependent : dependents) {
             newPool->enter(*dependent);
         }
-    } else {
-        delete newPool;
     }
 }
 

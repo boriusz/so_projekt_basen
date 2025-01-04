@@ -2,6 +2,7 @@
 #include "lifeguard.h"
 #include "cashier.h"
 #include "client.h"
+#include "pool_manager.h"
 #include <sys/wait.h>
 #include <signal.h>
 #include <unistd.h>
@@ -49,10 +50,10 @@ void initializeIPC() {
     }
 }
 
-pid_t createLifeguard(Pool &pool) {
+pid_t createLifeguard(Pool::PoolType poolType) {
     pid_t pid = fork();
     if (pid == 0) {
-        Lifeguard lifeguard(pool);
+        Lifeguard lifeguard(poolType);
         lifeguard.run();
         exit(0);
     }
@@ -75,18 +76,16 @@ int main() {
 
     initializeIPC();
 
-    Pool olympicPool(Pool::PoolType::Olympic, 100, 18, 70);
-    Pool recreationalPool(Pool::PoolType::Recreational, 100, 0, 70, 40);
-    Pool kidsPool(Pool::PoolType::Children, 100, 0, 5);
+    auto poolManager = PoolManager::getInstance();
+    poolManager->initialize();
 
     std::vector<pid_t> processes;
 
-    processes.push_back(createLifeguard(olympicPool));
-    processes.push_back(createLifeguard(recreationalPool));
-    processes.push_back(createLifeguard(kidsPool));
+    processes.push_back(createLifeguard(Pool::PoolType::Olympic));
+    processes.push_back(createLifeguard(Pool::PoolType::Recreational));
+    processes.push_back(createLifeguard(Pool::PoolType::Children));
 
     processes.push_back(createCashier());
-
     int clientId = 1;
     while (true) {
         if (rand() % 100 < 30) {

@@ -1,10 +1,14 @@
 #include "lifeguard.h"
+#include "pool_manager.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
 #include <sys/msg.h>
 
-Lifeguard::Lifeguard(Pool& pool) : pool(pool), poolClosed(false) {
+Lifeguard::Lifeguard(Pool::PoolType poolType) : poolClosed(false) {
+    auto poolManager = PoolManager::getInstance();
+    pool = poolManager->getPool(poolType);
+
     msgId = msgget(MSG_KEY, 0666);
     if (msgId < 0) {
         perror("msgget in Lifeguard");
@@ -15,7 +19,7 @@ Lifeguard::Lifeguard(Pool& pool) : pool(pool), poolClosed(false) {
 Lifeguard::~Lifeguard() {}
 
 void Lifeguard::notifyClients(int signal) {
-    PoolState* state = pool.getState();
+    PoolState *state = pool->getState();
 
     for (int i = 0; i < state->currentCount; i++) {
         Message msg;
@@ -29,7 +33,7 @@ void Lifeguard::notifyClients(int signal) {
 }
 
 void Lifeguard::waitForEmptyPool() {
-    while (!pool.isEmpty()) {
+    while (!pool->isEmpty()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 }

@@ -14,12 +14,15 @@ add_executable(swimming_pool
         src/cashier/cashier.h
         src/client/client.cpp
         src/client/client.h
+        src/pool_manager/pool_manager.cpp
+        src/pool_manager/pool_manager.h
 )
 
 target_include_directories(swimming_pool PRIVATE
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/src/common
         ${CMAKE_SOURCE_DIR}/src/pool
+        ${CMAKE_SOURCE_DIR}/src/pool_manager
         ${CMAKE_SOURCE_DIR}/src/lifeguard
         ${CMAKE_SOURCE_DIR}/src/cashier
         ${CMAKE_SOURCE_DIR}/src/client
