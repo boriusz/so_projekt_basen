@@ -3,9 +3,9 @@
 #include <sys/msg.h>
 #include <unistd.h>
 
-Client::Client(int id, int age, bool isVip, bool hasSwimDiaper)
+Client::Client(int id, int age, bool isVip, bool hasSwimDiaper, bool hasGuardian, int guardianId)
         : id(id), age(age), isVip(isVip), hasSwimDiaper(hasSwimDiaper),
-          hasGuardian(false), guardianId(-1), currentPool(nullptr) {
+          hasGuardian(hasGuardian), guardianId(guardianId), currentPool(nullptr) {
     if (age < 10 && !hasGuardian) {
         throw std::runtime_error("Cannot create client - child under 10 needs a guardian!");
     }
@@ -17,7 +17,7 @@ Client::Client(int id, int age, bool isVip, bool hasSwimDiaper)
     }
 }
 
-void Client::addDependent(Client* dependent) {
+void Client::addDependent(Client *dependent) {
     dependents.push_back(dependent);
     dependent->hasGuardian = true;
     dependent->guardianId = this->id;
@@ -30,7 +30,7 @@ void Client::handleLifeguardSignal() {
         if (msg.signal == 1) {
             if (currentPool) {
                 currentPool->leave(id);
-                for (auto dependent : dependents) {
+                for (auto dependent: dependents) {
                     currentPool->leave(dependent->id);
                 }
                 currentPool = nullptr;
@@ -40,21 +40,19 @@ void Client::handleLifeguardSignal() {
 }
 
 void Client::moveToAnotherPool() {
-    Pool* newPool = nullptr;
+    Pool *newPool = nullptr;
 
     if (age <= 5) {
         newPool = new Pool(Pool::PoolType::Children, 100, 0, 5);
-    }
-    else if (age < 18) {
-        newPool = new Pool(Pool::PoolType::Recreational,  100, 0, 70);
-    }
-    else {
-        newPool = new Pool(Pool::PoolType::Olympic,  100, 18, 70);
+    } else if (age < 18) {
+        newPool = new Pool(Pool::PoolType::Recreational, 100, 0, 70);
+    } else {
+        newPool = new Pool(Pool::PoolType::Olympic, 100, 18, 70);
     }
 
     if (newPool->enter(*this)) {
         currentPool = newPool;
-        for (auto dependent : dependents) {
+        for (auto dependent: dependents) {
             newPool->enter(*dependent);
         }
     } else {

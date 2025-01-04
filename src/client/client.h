@@ -22,7 +22,7 @@ private:
     void moveToAnotherPool();
 
 public:
-    Client(int id, int age, bool isVip, bool hasSwimDiaper = false);
+    Client(int id, int age, bool isVip, bool hasSwimDiaper = false, bool hasGuardian = false, int guardianId = -1);
 
     void addDependent(Client *dependent);
 
