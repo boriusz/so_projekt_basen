@@ -90,3 +90,4 @@ dkms.conf
 
 cmake-build-debug
 .DS_Store
+build/

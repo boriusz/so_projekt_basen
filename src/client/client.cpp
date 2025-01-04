@@ -1,4 +1,5 @@
 #include "client.h"
+#include "shared_memory.h"
 #include <iostream>
 #include <sys/msg.h>
 #include <unistd.h>

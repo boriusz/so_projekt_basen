@@ -1,8 +1,9 @@
 #ifndef SO_PROJEKT_BASEN_CLIENT_H
 #define SO_PROJEKT_BASEN_CLIENT_H
 
-#include "pool.h"
 #include <vector>
+class Pool;
+#include "pool.h"
 
 class Client {
 private:
