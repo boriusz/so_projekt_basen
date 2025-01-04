@@ -23,16 +23,28 @@ struct Ticket {
 class Cashier {
 private:
     int msgId;
+    int semId;
     int currentTicketNumber;
     std::vector<Ticket> activeTickets;
+    EntranceQueue *queue;
+
+    void processNextClient();
 
     bool isTicketValid(const Ticket& ticket) const;
     void removeExpiredTickets();
-    void issueTicket(const ClientRequest& request);
+
+    void addToQueue(const ClientRequest &request);
+
+    ClientRequest getNextClient();
+
+    bool isOpeningHours() const;
 
 public:
     Cashier();
+
     ~Cashier();
+
     void run();
 };
+
 #endif

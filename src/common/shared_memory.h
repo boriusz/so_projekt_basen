@@ -6,11 +6,13 @@
 #include <sys/shm.h>
 #include <sys/sem.h>
 #include <sys/msg.h>
+
 class Client;
+
 #include "client.h"
 
 struct PoolState {
-    Client* clients[100];
+    Client *clients[100];
     int currentCount;
     bool isClosed;
 };
@@ -19,6 +21,7 @@ struct SharedMemory {
     PoolState olympic;
     PoolState recreational;
     PoolState kids;
+    EntranceQueue entranceQueue;
     int workingHours[2];  // Tp, Tk
 };
 
@@ -36,7 +39,19 @@ enum Semaphores {
     SEM_OLYMPIC = 0,
     SEM_RECREATIONAL = 1,
     SEM_KIDS = 2,
-    SEM_COUNT = 3
+    SEM_ENTRANCE_QUEUE = 3,
+    SEM_COUNT = 4
+};
+
+struct EntranceQueue {
+    static const int MAX_QUEUE_SIZE = 100;
+    struct QueueEntry {
+        int clientId;
+        bool isVip;
+        time_t arrivalTime;
+    };
+    QueueEntry queue[MAX_QUEUE_SIZE];
+    int queueSize;
 };
 
 #endif
