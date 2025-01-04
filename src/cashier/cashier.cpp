@@ -1,4 +1,5 @@
 #include "cashier.h"
+#include "working_hours_manager.h"
 #include <sys/msg.h>
 #include <iostream>
 #include <ctime>
@@ -93,22 +94,11 @@ ClientRequest Cashier::getNextClient() {
     return nextClient;
 }
 
-bool Cashier::isOpeningHours() const {
-    time_t now;
-    time(&now);
-    struct tm* timeinfo = localtime(&now);
-    int currentHour = timeinfo->tm_hour;
-
-    int shmId = shmget(SHM_KEY, sizeof(SharedMemory), 0666);
-    SharedMemory* shm = (SharedMemory*)shmat(shmId, nullptr, 0);
-    return currentHour >= shm->workingHours[0] && currentHour < shm->workingHours[1];
-}
-
 void Cashier::processNextClient() {
     ClientRequest client = getNextClient();
     if (client.clientId == 0) return;
 
-    if (!isOpeningHours()) {
+    if (!WorkingHoursManager::isOpen()) {
         std::cout << "Cannot process client " << client.clientId
                   << " - outside opening hours" << std::endl;
         return;

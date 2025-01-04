@@ -3,26 +3,30 @@
 
 #include "pool.h"
 #include <atomic>
-#include <condition_variable>
-#include <mutex>
+#include <pthread.h>
 
 class Lifeguard {
 private:
     Pool* pool;
     std::atomic<bool> poolClosed;
+    std::atomic<bool> isEmergency;
     int msgId;
+    pthread_mutex_t stateMutex;
 
     void notifyClients(int signal);
     void waitForEmptyPool();
+    void handleEmergency();
 
 public:
-    Lifeguard(Pool::PoolType pool);
+    explicit Lifeguard(Pool* pool);
     ~Lifeguard();
 
     void run();
     void closePool();   // signal1
     void openPool();    // signal2
-    bool isPoolClosed() const { return poolClosed; }
+
+    Lifeguard(const Lifeguard&) = delete;
+    Lifeguard& operator=(const Lifeguard&) = delete;
 };
 
 #endif

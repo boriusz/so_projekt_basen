@@ -16,6 +16,7 @@ add_executable(swimming_pool
         src/client/client.h
         src/pool_manager/pool_manager.cpp
         src/pool_manager/pool_manager.h
+        src/working_hours_manager/working_hours_manager.h
 )
 
 target_include_directories(swimming_pool PRIVATE
@@ -26,6 +27,7 @@ target_include_directories(swimming_pool PRIVATE
         ${CMAKE_SOURCE_DIR}/src/lifeguard
         ${CMAKE_SOURCE_DIR}/src/cashier
         ${CMAKE_SOURCE_DIR}/src/client
+        ${CMAKE_SOURCE_DIR}/src/working_hours_manager
 )
 
 find_package(Threads REQUIRED)

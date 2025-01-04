@@ -37,8 +37,6 @@ private:
 
     ClientRequest getNextClient();
 
-    bool isOpeningHours() const;
-
 public:
     Cashier();
 

@@ -1,17 +1,15 @@
 #ifndef SO_PROJEKT_BASEN_POOL_H
 #define SO_PROJEKT_BASEN_POOL_H
 
-struct PoolState;
 #include "shared_memory.h"
 #include <string>
 #include <mutex>
 #include <vector>
-#include <vector>
 #include <numeric>
 #include <algorithm>
-class Client;
-#include "client.h"
+#include <pthread.h>
 
+class Client;
 
 class Pool {
 public:
@@ -26,7 +24,7 @@ public:
 
     ~Pool();
 
-    bool enter(Client client);
+    bool enter(Client &client);
 
     void leave(int clientId);
 
@@ -34,7 +32,10 @@ public:
 
     bool isEmpty() const;
 
+    PoolType getType();
+
     PoolState *getState() { return state; }
+
 private:
     int shmId;
     int semId;
@@ -45,11 +46,24 @@ private:
     int maxAge;
     double maxAverageAge;
     bool needsSupervision;
+    mutable pthread_mutex_t avgAgeMutex;
+    mutable pthread_mutex_t stateMutex;
 
-    void lock();
+    class ScopedLock {
+        pthread_mutex_t &mutex;
+    public:
+        explicit ScopedLock(pthread_mutex_t &m) : mutex(m) {
+            pthread_mutex_lock(&mutex);
+        }
 
-    void unlock();
+        ~ScopedLock() {
+            pthread_mutex_unlock(&mutex);
+        }
 
+        ScopedLock(const ScopedLock &) = delete;
+
+        ScopedLock &operator=(const ScopedLock &) = delete;
+    };
 };
 
 #endif //SO_PROJEKT_BASEN_POOL_H
