@@ -45,6 +45,8 @@ public:
     double getCurrentAverageAge() const;
 
     bool isEmpty() const;
+
+    PoolState *getState() { return state; }
 };
 
 #endif //SO_PROJEKT_BASEN_POOL_H

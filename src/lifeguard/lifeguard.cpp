@@ -2,37 +2,59 @@
 #include <iostream>
 #include <thread>
 #include <chrono>
+#include <sys/msg.h>
 
-Lifeguard::Lifeguard(Pool& pool) : pool(pool), poolClosed(false) {}
+Lifeguard::Lifeguard(Pool& pool) : pool(pool), poolClosed(false) {
+    msgId = msgget(MSG_KEY, 0666);
+    if (msgId < 0) {
+        perror("msgget in Lifeguard");
+        exit(1);
+    }
+}
 
-void Lifeguard::run() {
-    while (true) {
-        std::this_thread::sleep_for(std::chrono::seconds(rand() % 30 + 30));
-        closePool();
+Lifeguard::~Lifeguard() {}
 
-        while (!pool.isEmpty()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+void Lifeguard::notifyClients(int signal) {
+    PoolState* state = pool.getState();
+
+    for (int i = 0; i < state->currentCount; i++) {
+        Message msg;
+        msg.mtype = state->clients[i]->getId();
+        msg.signal = signal;
+
+        if (msgsnd(msgId, &msg, sizeof(Message) - sizeof(long), 0) == -1) {
+            perror("msgsnd in Lifeguard");
         }
+    }
+}
 
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-        openPool();
+void Lifeguard::waitForEmptyPool() {
+    while (!pool.isEmpty()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 }
 
 void Lifeguard::closePool() {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::cout << "Lifeguard: Closing pool!" << std::endl;
     poolClosed = true;
-    cv.notify_all();
-    std::cout << "Lifeguard: Pool " << pool.getVariant() << " closed!" << std::endl;
+    notifyClients(1);
+    waitForEmptyPool();
 }
 
 void Lifeguard::openPool() {
-    std::lock_guard<std::mutex> lock(mtx);
+    std::cout << "Lifeguard: Opening pool!" << std::endl;
     poolClosed = false;
-    cv.notify_all();
-    std::cout << "Lifeguard: Pool " << pool.getVariant() << " open!" << std::endl;
+    notifyClients(2);
 }
 
-bool Lifeguard::isPoolClosed() const {
-    return poolClosed;
+void Lifeguard::run() {
+    while (true) {
+        std::this_thread::sleep_for(std::chrono::seconds(rand() % 30 + 30));
+
+        closePool();
+
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+
+        openPool();
+    }
 }
