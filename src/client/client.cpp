@@ -6,6 +6,9 @@
 Client::Client(int id, int age, bool isVip, bool hasSwimDiaper)
         : id(id), age(age), isVip(isVip), hasSwimDiaper(hasSwimDiaper),
           hasGuardian(false), guardianId(-1), currentPool(nullptr) {
+    if (age < 10 && !hasGuardian) {
+        throw std::runtime_error("Cannot create client - child under 10 needs a guardian!");
+    }
 
     msgId = msgget(MSG_KEY, 0666);
     if (msgId < 0) {

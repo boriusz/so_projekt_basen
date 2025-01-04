@@ -11,18 +11,28 @@ struct ClientRequest {
     bool hasSwimDiaper;
 };
 
+struct Ticket {
+    int id;
+    int clientId;
+    int validityTime;
+    time_t issueTime;
+    bool isVip;
+    bool isChild;
+};
+
 class Cashier {
 private:
     int msgId;
     int currentTicketNumber;
+    std::vector<Ticket> activeTickets;
+
+    bool isTicketValid(const Ticket& ticket) const;
+    void removeExpiredTickets();
+    void issueTicket(const ClientRequest& request);
 
 public:
     Cashier();
     ~Cashier();
-
     void run();
-    void handleClient(const ClientRequest& request);
-    void issueTicket(int clientId, bool isVip);
 };
-
 #endif

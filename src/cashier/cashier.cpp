@@ -1,51 +1,77 @@
 #include "cashier.h"
 #include <sys/msg.h>
 #include <iostream>
+#include <ctime>
+#include <thread>
 
 Cashier::Cashier() : currentTicketNumber(1) {
-    msgId = msgget(MSG_KEY, IPC_CREAT | 0666);
+    msgId = msgget(MSG_KEY, 0666);
     if (msgId < 0) {
-        perror("msgget failed");
+        perror("msgget failed in Cashier");
         exit(1);
     }
 }
 
 Cashier::~Cashier() {}
 
+bool Cashier::isTicketValid(const Ticket &ticket) const {
+    time_t now;
+    time(&now);
+    return (now - ticket.issueTime) < (ticket.validityTime * 60);
+}
+
+void Cashier::removeExpiredTickets() {
+    auto it = activeTickets.begin();
+    while (it != activeTickets.end()) {
+        if (!isTicketValid(*it)) {
+            std::cout << "Ticket " << it->id << " for client " << it->clientId << " has expired" << std::endl;
+            it = activeTickets.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void Cashier::issueTicket(const ClientRequest &request) {
+    if (request.age < 10 && !request.hasGuardian) {
+        std::cout << "Cannot issue ticket - child under 10 needs a guardian!" << std::endl;
+        return;
+    }
+
+    Ticket ticket;
+    ticket.id = currentTicketNumber++;
+    ticket.clientId = request.clientId;
+    ticket.isVip = (request.mtype == 2);
+    ticket.isChild = (request.age < 10);
+    ticket.validityTime = 120;
+    time(&ticket.issueTime);
+
+    if (ticket.isChild) {
+        std::cout << "Free entry for child (client " << request.clientId << ")" << std::endl;
+    } else {
+        std::cout << "Issuing paid ticket " << ticket.id << " for client " << request.clientId;
+        if (ticket.isVip) std::cout << " (VIP)";
+        std::cout << std::endl;
+    }
+
+    activeTickets.push_back(ticket);
+}
+
 void Cashier::run() {
     ClientRequest request;
 
-    while(true) {
-        //  VIP (mtype = 2)
+    while (true) {
+        removeExpiredTickets();
+
         if (msgrcv(msgId, &request, sizeof(ClientRequest) - sizeof(long), 2, IPC_NOWAIT) >= 0) {
-            handleClient(request);
+            issueTicket(request);
             continue;
         }
 
-        // regular client (mtype = 1)
         if (msgrcv(msgId, &request, sizeof(ClientRequest) - sizeof(long), 1, 0) >= 0) {
-            handleClient(request);
+            issueTicket(request);
         }
+
+        std::this_thread::sleep_for(std::chrono::seconds(1));  // Symulacja czasu obsługi
     }
-}
-
-void Cashier::handleClient(const ClientRequest& request) {
-    std::cout << "Handling client " << request.clientId;
-    std::cout << (request.mtype == 2 ? " (VIP)" : "") << std::endl;
-
-    if (request.age < 10) {
-        if (request.hasGuardian) {
-            std::cout << "Child under 10 - free entry" << std::endl;
-        } else {
-            std::cout << "Child under 10 - without guardian -- out" << std::endl;
-        }
-    } else {
-        std::cout << "Issuing ticket..." << std::endl;
-    }
-
-    issueTicket(request.clientId, request.mtype == 2);
-}
-
-void Cashier::issueTicket(int clientId, bool isVip) {
-    std::cout << "Ticket " << currentTicketNumber++ << " issued to client " << clientId << std::endl;
 }
