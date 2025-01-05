@@ -40,7 +40,7 @@ private:
 public:
     Cashier();
 
-    ~Cashier();
+    ~Cashier() = default;
 
     void run();
 };

@@ -158,3 +158,15 @@ bool Pool::isEmpty() const {
 Pool::PoolType Pool::getType() {
     return Pool::poolType;
 }
+
+void Pool::closeForMaintenance() {
+    ScopedLock stateLock(stateMutex);
+    state->isClosed = true;
+    state->isUnderMaintenance = true;
+}
+
+void Pool::reopenAfterMaintenance() {
+    ScopedLock stateLock(stateMutex);
+    state->isUnderMaintenance = false;
+    state->isClosed = false;
+}

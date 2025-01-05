@@ -1,6 +1,7 @@
 #ifndef SO_PROJEKT_BASEN_POOL_H
 #define SO_PROJEKT_BASEN_POOL_H
 
+struct PoolState;
 #include "shared_memory.h"
 #include <string>
 #include <mutex>
@@ -35,6 +36,11 @@ public:
     PoolType getType();
 
     PoolState *getState() { return state; }
+
+    void closeForMaintenance();
+
+    void reopenAfterMaintenance();
+
 
 private:
     int shmId;

@@ -7,6 +7,8 @@
 #include <signal.h>
 #include <unistd.h>
 #include <vector>
+#include <iostream>
+#include "maintenance_manager.h"
 
 int shmId = -1;
 int semId = -1;
@@ -18,9 +20,11 @@ void cleanup() {
     if (msgId != -1) msgctl(msgId, IPC_RMID, nullptr);
 }
 
+std::atomic<bool> shouldRun(true);
+
 void signalHandler(int signo) {
-    cleanup();
-    exit(0);
+    std::cout << "Received signal to terminate" << std::endl;
+    shouldRun = false;
 }
 
 void initializeIPC() {
@@ -95,9 +99,23 @@ pid_t createClientWithPossibleDependent(int& clientId) {
     return pid;
 }
 
+void maintenanceThread() {
+    auto maintenanceManager = MaintenanceManager::getInstance();
+
+    while (true) {
+        if (!WorkingHoursManager::isOpen()) {
+            maintenanceManager->startMaintenance();
+            std::this_thread::sleep_for(std::chrono::minutes(30));
+            maintenanceManager->endMaintenance();
+        }
+        std::this_thread::sleep_for(std::chrono::hours(24));
+    }
+}
+
 int main() {
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
+
 
     initializeIPC();
 
@@ -111,18 +129,26 @@ int main() {
     processes.push_back(createLifeguard(Pool::PoolType::Children));
 
     processes.push_back(createCashier());
+
+    std::thread maintenance(maintenanceThread);
+    maintenance.detach();
+
     int clientId = 1;
-    while (true) {
+    while (shouldRun) {
         if (rand() % 100 < 30) {
             processes.push_back(createClientWithPossibleDependent(clientId));
         }
         sleep(1);
     }
 
-    for (pid_t pid: processes) {
+    std::cout << "Cleaning up..." << std::endl;
+
+    for (pid_t pid : processes) {
+        kill(pid, SIGTERM);
         waitpid(pid, nullptr, 0);
     }
 
     cleanup();
+    poolManager->cleanup();
     return 0;
 }

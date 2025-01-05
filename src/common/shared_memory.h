@@ -15,6 +15,18 @@ struct PoolState {
     Client *clients[100];
     int currentCount;
     bool isClosed;
+    bool isUnderMaintenance;
+};
+
+struct EntranceQueue {
+    static const int MAX_QUEUE_SIZE = 100;
+    struct QueueEntry {
+        int clientId;
+        bool isVip;
+        time_t arrivalTime;
+    };
+    QueueEntry queue[MAX_QUEUE_SIZE];
+    int queueSize;
 };
 
 struct SharedMemory {
@@ -43,15 +55,5 @@ enum Semaphores {
     SEM_COUNT = 4
 };
 
-struct EntranceQueue {
-    static const int MAX_QUEUE_SIZE = 100;
-    struct QueueEntry {
-        int clientId;
-        bool isVip;
-        time_t arrivalTime;
-    };
-    QueueEntry queue[MAX_QUEUE_SIZE];
-    int queueSize;
-};
 
 #endif
