@@ -63,14 +63,6 @@ Pool::Pool(Pool::PoolType poolType, int capacity, int minAge, int maxAge,
 
 }
 
-Pool::~Pool() {
-    if (shmdt(state) == -1) {
-        perror("shmdt failed in Pool");
-    }
-    pthread_mutex_destroy(&avgAgeMutex);
-    pthread_mutex_destroy(&stateMutex);
-}
-
 bool Pool::enter(Client &client) {
     if (client.getAge() < minAge || client.getAge() > maxAge) {
         std::cout << "Client " << client.getId() << " age (" << client.getAge()

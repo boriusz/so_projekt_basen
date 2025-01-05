@@ -24,7 +24,7 @@ public:
     Pool(PoolType poolType, int capacity, int minAge, int maxAge,
          double maxAverageAge = 0, bool needsSupervision = false);
 
-    ~Pool() { cleanup() };
+    ~Pool() { cleanup(); };
 
     bool enter(Client &client);
 

@@ -21,7 +21,7 @@ private:
 
 public:
     explicit Lifeguard(Pool* pool);
-    ~Lifeguard() { cleanup() };
+    ~Lifeguard() { cleanup(); };
 
     void run();
     void closePool();   // signal1
