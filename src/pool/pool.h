@@ -2,6 +2,7 @@
 #define SO_PROJEKT_BASEN_POOL_H
 
 struct PoolState;
+
 #include "shared_memory.h"
 #include <string>
 #include <mutex>
@@ -23,7 +24,7 @@ public:
     Pool(PoolType poolType, int capacity, int minAge, int maxAge,
          double maxAverageAge = 0, bool needsSupervision = false);
 
-    ~Pool();
+    ~Pool() { cleanup() };
 
     bool enter(Client &client);
 
@@ -54,6 +55,18 @@ private:
     bool needsSupervision;
     mutable pthread_mutex_t avgAgeMutex;
     mutable pthread_mutex_t stateMutex;
+
+    void cleanup() {
+        if (pthread_mutex_destroy(&avgAgeMutex) != 0) {
+            perror("Failed to destroy average age mutex");
+        }
+        if (pthread_mutex_destroy(&stateMutex) != 0) {
+            perror("Failed to destroy state mutex");
+        }
+        if (state != nullptr && shmdt(state) == -1) {
+            perror("shmdt failed in Pool cleanup");
+        }
+    }
 
     class ScopedLock {
         pthread_mutex_t &mutex;

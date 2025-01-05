@@ -1,5 +1,6 @@
 #include "cashier.h"
 #include "working_hours_manager.h"
+#include "error_handler.h"
 #include <sys/msg.h>
 #include <iostream>
 #include <ctime>
@@ -7,41 +8,38 @@
 #include <algorithm>
 
 Cashier::Cashier() : currentTicketNumber(1) {
-    msgId = msgget(MSG_KEY, 0666);
-    if (msgId < 0) {
-        perror("msgget failed in Cashier");
-        exit(1);
-    }
+    try {
+        msgId = msgget(MSG_KEY, 0666);
+        checkSystemCall(msgId, "msgget failed in Cashier");
 
-    semId = semget(SEM_KEY, SEM_COUNT, 0666);
-    if (semId < 0) {
-        perror("semget failed in Cashier");
-        exit(1);
-    }
+        semId = semget(SEM_KEY, SEM_COUNT, 0666);
+        checkSystemCall(semId, "semget failed in Cashier");
 
-    int shmId = shmget(SHM_KEY, sizeof(SharedMemory), 0666);
-    if (shmId < 0) {
-        perror("shmget failed in Cashier");
-        exit(1);
-    }
+        int shmId = shmget(SHM_KEY, sizeof(SharedMemory), 0666);
+        checkSystemCall(shmId, "shmget failed in Cashier");
 
-    SharedMemory* shm = (SharedMemory*)shmat(shmId, nullptr, 0);
-    if (shm == (void*)-1) {
-        perror("shmat failed in Cashier");
-        exit(1);
-    }
+        SharedMemory *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
+        if (shm == (void *) -1) {
+            throw PoolSystemError("shmat failed in Cashier");
+        }
 
-    queue = &shm->entranceQueue;
+        queue = &shm->entranceQueue;
+    } catch (const std::exception &e) {
+        std::cerr << "Error initializing Cashier: " << e.what() << std::endl;
+        throw;
+    }
 }
 
-void Cashier::addToQueue(const ClientRequest& request) {
-    struct sembuf op = {SEM_ENTRANCE_QUEUE, -1, 0};
-    if (semop(semId, &op, 1) == -1) {
-        perror("semop lock failed");
-        return;
-    }
+void Cashier::addToQueue(const ClientRequest &request) {
+    try {
+        struct sembuf op = {SEM_ENTRANCE_QUEUE, -1, 0};
+        checkSystemCall(semop(semId, &op, 1), "semop lock failed");
 
-    if (queue->queueSize < EntranceQueue::MAX_QUEUE_SIZE) {
+        if (queue->queueSize >= EntranceQueue::MAX_QUEUE_SIZE) {
+            throw PoolError("Queue is full");
+        }
+
+
         EntranceQueue::QueueEntry entry;
         entry.clientId = request.clientId;
         entry.isVip = (request.mtype == 2);
@@ -55,7 +53,7 @@ void Cashier::addToQueue(const ClientRequest& request) {
         }
 
         for (int i = queue->queueSize; i > insertPos; i--) {
-            queue->queue[i] = queue->queue[i-1];
+            queue->queue[i] = queue->queue[i - 1];
         }
 
         queue->queue[insertPos] = entry;
@@ -63,10 +61,15 @@ void Cashier::addToQueue(const ClientRequest& request) {
 
         std::cout << "Client " << entry.clientId << (entry.isVip ? " (VIP)" : "")
                   << " added to queue at position " << insertPos + 1 << std::endl;
-    }
 
-    op.sem_op = 1;
-    semop(semId, &op, 1);
+        op.sem_op = 1;
+        checkSystemCall(semop(semId, &op, 1), "semop unlock failed");
+    } catch (const std::exception &e) {
+        std::cerr << "Error adding to queue: " << e.what() << std::endl;
+        struct sembuf op = {SEM_ENTRANCE_QUEUE, 1, 0};
+        semop(semId, &op, 1);
+        throw;
+    }
 }
 
 ClientRequest Cashier::getNextClient() {

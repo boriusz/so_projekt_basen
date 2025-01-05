@@ -1,51 +1,51 @@
 #include "lifeguard.h"
 #include "working_hours_manager.h"
+#include "error_handler.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
 #include <sys/msg.h>
 #include <ctime>
 
-Lifeguard::Lifeguard(Pool *pool)
-        : pool(pool), poolClosed(false), isEmergency(false) {
+Lifeguard::Lifeguard(Pool *pool) : pool(pool), poolClosed(false), isEmergency(false) {
+    try {
+        checkSystemCall(pthread_mutex_init(&stateMutex, nullptr),
+                        "Failed to initialize state mutex");
 
-    if (pthread_mutex_init(&stateMutex, nullptr) != 0) {
-        perror("Failed to initialize state mutex");
-        exit(1);
+        msgId = msgget(MSG_KEY, 0666);
+        checkSystemCall(msgId, "msgget failed in Lifeguard");
+
+    } catch (const std::exception &e) {
+        cleanup();
+        std::cerr << "Error initializing Lifeguard: " << e.what() << std::endl;
+        throw;
     }
-
-    msgId = msgget(MSG_KEY, 0666);
-    if (msgId < 0) {
-        perror("msgget failed in Lifeguard");
-        pthread_mutex_destroy(&stateMutex);
-        exit(1);
-    }
-}
-
-Lifeguard::~Lifeguard() {
-    pthread_mutex_destroy(&stateMutex);
 }
 
 void Lifeguard::notifyClients(int signal) {
-    PoolState *state = pool->getState();
-    pthread_mutex_lock(&stateMutex);
+    try {
+        PoolState *state = pool->getState();
 
-    for (int i = 0; i < state->currentCount; i++) {
-        Message msg;
-        msg.mtype = state->clients[i]->getId();
-        msg.signal = signal;
-        msg.poolId = static_cast<int>(pool->getType());
+        checkSystemCall(pthread_mutex_lock(&stateMutex),
+                        "Failed to lock state mutex");
 
-        if (msgsnd(msgId, &msg, sizeof(Message) - sizeof(long), 0) == -1) {
-            perror("msgsnd failed in Lifeguard");
-            std::cerr << "Failed to notify client " << state->clients[i]->getId() << std::endl;
-        } else {
-            std::cout << "Notified client " << state->clients[i]->getId()
-                      << " with signal " << signal << std::endl;
+        for (int i = 0; i < state->currentCount; i++) {
+            Message msg;
+            msg.mtype = state->clients[i]->getId();
+            msg.signal = signal;
+            msg.poolId = static_cast<int>(pool->getType());
+
+            checkSystemCall(msgsnd(msgId, &msg, sizeof(Message) - sizeof(long), 0),
+                            "Failed to send message to client");
         }
-    }
 
-    pthread_mutex_unlock(&stateMutex);
+        checkSystemCall(pthread_mutex_unlock(&stateMutex),
+                        "Failed to unlock state mutex");
+    } catch (const std::exception &e) {
+        pthread_mutex_unlock(&stateMutex);
+        std::cerr << "Error notifying clients: " << e.what() << std::endl;
+        throw;
+    }
 }
 
 void Lifeguard::waitForEmptyPool() {
@@ -136,5 +136,11 @@ void Lifeguard::run() {
         }
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+}
+
+void Lifeguard::cleanup() {
+    if (pthread_mutex_destroy(&stateMutex) != 0) {
+        perror("Failed to destroy state mutex");
     }
 }

@@ -3,59 +3,64 @@
 #include <sys/sem.h>
 #include <cstring>
 #include <iostream>
+#include "error_handler.h"
 
 Pool::Pool(Pool::PoolType poolType, int capacity, int minAge, int maxAge,
            double maxAverageAge, bool needsSupervision)
         : poolType(poolType), capacity(capacity), minAge(minAge), maxAge(maxAge),
           maxAverageAge(maxAverageAge), needsSupervision(needsSupervision) {
 
-    if (pthread_mutex_init(&avgAgeMutex, nullptr) != 0) {
-        perror("Failed to initialize average age mutex");
-        exit(1);
+
+    try {
+        validatePoolParameters(capacity, minAge, maxAge, maxAverageAge);
+
+        this->poolType = poolType;
+        this->capacity = capacity;
+        this->minAge = minAge;
+        this->maxAge = maxAge;
+        this->maxAverageAge = maxAverageAge;
+        this->needsSupervision = needsSupervision;
+
+        checkSystemCall(pthread_mutex_init(&avgAgeMutex, nullptr),
+                        "Failed to initialize average age mutex");
+
+        checkSystemCall(pthread_mutex_init(&stateMutex, nullptr),
+                        "Failed to initialize state mutex");
+
+        shmId = shmget(SHM_KEY, sizeof(SharedMemory), 0666);
+        checkSystemCall(shmId, "shmget failed in Pool");
+
+        SharedMemory *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
+        if (shm == (void *) -1) {
+            throw PoolSystemError("shmat failed in Pool");
+        }
+
+        switch (poolType) {
+            case PoolType::Olympic:
+                state = &shm->olympic;
+                break;
+            case PoolType::Recreational:
+                state = &shm->recreational;
+                break;
+            case PoolType::Children:
+                state = &shm->kids;
+                break;
+        }
+
+        semId = semget(SEM_KEY, SEM_COUNT, 0666);
+        if (semId < 0) {
+            perror("semget failed in Pool");
+            shmdt(shm);
+            pthread_mutex_destroy(&avgAgeMutex);
+            pthread_mutex_destroy(&stateMutex);
+            exit(1);
+        }
+    } catch (const std::exception &e) {
+        cleanup();
+        throw;
     }
 
-    if (pthread_mutex_init(&stateMutex, nullptr) != 0) {
-        perror("Failed to initialize state mutex");
-        pthread_mutex_destroy(&avgAgeMutex);
-        exit(1);
-    }
 
-    shmId = shmget(SHM_KEY, sizeof(SharedMemory), 0666);
-    if (shmId < 0) {
-        perror("shmget failed in Pool");
-        pthread_mutex_destroy(&avgAgeMutex);
-        pthread_mutex_destroy(&stateMutex);
-        exit(1);
-    }
-
-    SharedMemory *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
-    if (shm == (void *) -1) {
-        perror("shmat failed in Pool");
-        pthread_mutex_destroy(&avgAgeMutex);
-        pthread_mutex_destroy(&stateMutex);
-        exit(1);
-    }
-
-    switch (poolType) {
-        case PoolType::Olympic:
-            state = &shm->olympic;
-            break;
-        case PoolType::Recreational:
-            state = &shm->recreational;
-            break;
-        case PoolType::Children:
-            state = &shm->kids;
-            break;
-    }
-
-    semId = semget(SEM_KEY, SEM_COUNT, 0666);
-    if (semId < 0) {
-        perror("semget failed in Pool");
-        shmdt(shm);
-        pthread_mutex_destroy(&avgAgeMutex);
-        pthread_mutex_destroy(&stateMutex);
-        exit(1);
-    }
 }
 
 Pool::~Pool() {

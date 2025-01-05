@@ -19,6 +19,8 @@ add_executable(swimming_pool
         src/working_hours_manager/working_hours_manager.h
         src/maintenance_manager/maintenance_manager.h
         src/maintenance_manager/maintenance_manager.cpp
+        src/error_handler/error_handler.h
+        src/error_handler/error_handler.cpp
 )
 
 target_include_directories(swimming_pool PRIVATE
@@ -31,6 +33,7 @@ target_include_directories(swimming_pool PRIVATE
         ${CMAKE_SOURCE_DIR}/src/client
         ${CMAKE_SOURCE_DIR}/src/working_hours_manager
         ${CMAKE_SOURCE_DIR}/src/maintenance_manager
+        ${CMAKE_SOURCE_DIR}/src/error_handler
 )
 
 find_package(Threads REQUIRED)
