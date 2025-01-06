@@ -155,6 +155,8 @@ void Cashier::removeExpiredTickets() {
 
 
 void Cashier::run() {
+    signal(SIGTERM, [](int) { exit(0); });
+
     while (true) {
         ClientRequest request;
         if (msgrcv(msgId, &request, sizeof(ClientRequest) - sizeof(long), -2, IPC_NOWAIT) >= 0) {

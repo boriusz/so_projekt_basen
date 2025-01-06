@@ -29,11 +29,3 @@ Pool* PoolManager::getPool(Pool::PoolType type) {
             return nullptr;
     }
 }
-
-void PoolManager::cleanup() {
-    olympicPool.reset();
-    recreationalPool.reset();
-    kidsPool.reset();
-    delete instance;
-    instance = nullptr;
-}

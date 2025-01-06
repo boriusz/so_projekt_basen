@@ -11,8 +11,17 @@ class Client;
 
 #include "client.h"
 
+struct ClientData {
+    int id;
+    int age;
+    bool isVip;
+    bool hasSwimDiaper;
+    bool hasGuardian;
+    int guardianId;
+};
+
 struct PoolState {
-    Client *clients[100];
+    ClientData clients[100];
     int currentCount;
     bool isClosed;
     bool isUnderMaintenance;
@@ -30,6 +39,7 @@ struct EntranceQueue {
 };
 
 struct SharedMemory {
+    pthread_mutex_t mutex;
     PoolState olympic;
     PoolState recreational;
     PoolState kids;

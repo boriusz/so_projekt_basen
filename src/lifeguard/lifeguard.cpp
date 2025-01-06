@@ -16,7 +16,6 @@ Lifeguard::Lifeguard(Pool *pool) : pool(pool), poolClosed(false), isEmergency(fa
         checkSystemCall(msgId, "msgget failed in Lifeguard");
 
     } catch (const std::exception &e) {
-        cleanup();
         std::cerr << "Error initializing Lifeguard: " << e.what() << std::endl;
         throw;
     }
@@ -31,7 +30,7 @@ void Lifeguard::notifyClients(int signal) {
 
         for (int i = 0; i < state->currentCount; i++) {
             Message msg;
-            msg.mtype = state->clients[i]->getId();
+            msg.mtype = state->clients[i].id;
             msg.signal = signal;
             msg.poolId = static_cast<int>(pool->getType());
 
@@ -114,6 +113,8 @@ void Lifeguard::openPool() {
 }
 
 void Lifeguard::run() {
+    signal(SIGTERM, [](int) { exit(0); });
+
     while (true) {
         if (!WorkingHoursManager::isOpen()) {
             if (!poolClosed.load()) {
@@ -136,11 +137,5 @@ void Lifeguard::run() {
         }
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
-    }
-}
-
-void Lifeguard::cleanup() {
-    if (pthread_mutex_destroy(&stateMutex) != 0) {
-        perror("Failed to destroy state mutex");
     }
 }

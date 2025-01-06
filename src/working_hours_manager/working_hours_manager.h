@@ -2,6 +2,7 @@
 #define SWIMMING_POOL_WORKING_HOURS_MANAGER_H
 
 #include <ctime>
+#include <iostream>
 #include "shared_memory.h"
 
 class WorkingHoursManager {
@@ -25,11 +26,13 @@ public:
         }
 
         bool isOpen = currentHour >= shm->workingHours[0] &&
-                      currentHour < shm->workingHours[1];
+                      currentHour < shm->workingHours[1] &&
+                      !shm->olympic.isUnderMaintenance &&
+                      !shm->recreational.isUnderMaintenance &&
+                      !shm->kids.isUnderMaintenance;
 
         shmdt(shm);
         return isOpen;
     }
 };
-
 #endif

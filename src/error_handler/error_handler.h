@@ -19,7 +19,6 @@ public:
             : PoolError(message + ": " + std::string(strerror(errno))),
               errorCode(errno) {}
 
-    int getErrorCode() const { return errorCode; }
 };
 
 void checkSystemCall(int result, const std::string &operation);
@@ -27,8 +26,6 @@ void checkSystemCall(int result, const std::string &operation);
 void validateAge(int age);
 
 void validateCapacity(int capacity);
-
-void validateWorkingHours(int startHour, int endHour);
 
 void validatePoolParameters(int capacity, int minAge, int maxAge, double maxAverageAge);
 

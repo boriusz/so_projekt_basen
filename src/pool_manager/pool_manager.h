@@ -23,7 +23,6 @@ public:
     PoolManager& operator=(const PoolManager&) = delete;
 
     void initialize();
-    void cleanup();
 };
 
 #endif

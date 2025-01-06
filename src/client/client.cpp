@@ -59,41 +59,58 @@ void Client::handleLifeguardSignal() {
 }
 
 void Client::moveToAnotherPool() {
+    std::cout << "moveToAnotherPool" << std::endl;
     try {
+        if (!WorkingHoursManager::isOpen()) {
+            std::cout << "Client " << id << " waiting for facility to open..." << std::endl;
+            sleep(5);
+            return;
+        }
+
         Pool *newPool = nullptr;
         auto poolManager = PoolManager::getInstance();
 
-        if (!WorkingHoursManager::isOpen()) {
-            throw PoolError("Cannot enter pool - facility is closed");
-        }
+        int retries = 0;
+        while (!newPool && retries < 3) {
+            if (age <= 5) {
+                newPool = poolManager->getPool(Pool::PoolType::Children);
+            } else if (age < 18) {
+                newPool = poolManager->getPool(Pool::PoolType::Recreational);
+            } else {
+                newPool = poolManager->getPool(Pool::PoolType::Olympic);
+            }
 
-        if (age <= 5) {
-            newPool = poolManager->getPool(Pool::PoolType::Children);
-        } else if (age < 18) {
-            newPool = poolManager->getPool(Pool::PoolType::Recreational);
-        } else {
-            newPool = poolManager->getPool(Pool::PoolType::Olympic);
+            if (!newPool || !newPool->enter(*this)) {
+                std::cout << "Client " << id << " waiting for pool availability..." << std::endl;
+                sleep(2);
+                retries++;
+                newPool = nullptr;
+            }
         }
 
         if (!newPool) {
-            throw PoolError("No suitable pool available");
+            std::cout << "Client " << id << " could not find available pool after " << retries << " attempts"
+                      << std::endl;
+            return;
         }
 
-        if (newPool->enter(*this)) {
-            currentPool = newPool;
-            for (auto dependent: dependents) {
-                if (!newPool->enter(*dependent)) {
-                    throw PoolError("Failed to enter dependent into pool");
-                }
+        currentPool = newPool;
+        for (auto dependent: dependents) {
+            if (!newPool->enter(*dependent)) {
+                currentPool->leave(id);
+                currentPool = nullptr;
+                std::cout << "Client " << id << " leaving pool because dependent could not enter" << std::endl;
+                break;
             }
         }
     } catch (const std::exception &e) {
-        std::cerr << "Error moving to another pool: " << e.what() << std::endl;
-        throw;
+        std::cerr << "Error moving client " << id << " to another pool: " << e.what() << std::endl;
     }
 }
 
 void Client::run() {
+    signal(SIGTERM, [](int) { exit(0); });
+
     while (true) {
         handleLifeguardSignal();
 

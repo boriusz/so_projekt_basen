@@ -23,18 +23,8 @@ void validateCapacity(int capacity) {
     }
 }
 
-void validateWorkingHours(int startHour, int endHour) {
-    if (startHour < 0 || startHour > 23 || endHour < 0 || endHour > 23 || startHour >= endHour) {
-        std::stringstream ss;
-        ss << "Invalid working hours: " << startHour << "-" << endHour;
-        throw PoolError(ss.str());
-    }
-}
-
 void validatePoolParameters(int capacity, int minAge, int maxAge, double maxAverageAge) {
     validateCapacity(capacity);
-    validateAge(minAge);
-    validateAge(maxAge);
 
     if (minAge > maxAge) {
         throw PoolError("Minimum age cannot be greater than maximum age");

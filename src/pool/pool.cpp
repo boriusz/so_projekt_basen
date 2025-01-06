@@ -56,7 +56,6 @@ Pool::Pool(Pool::PoolType poolType, int capacity, int minAge, int maxAge,
             exit(1);
         }
     } catch (const std::exception &e) {
-        cleanup();
         throw;
     }
 
@@ -103,13 +102,22 @@ bool Pool::enter(Client &client) {
         double newAverage = getCurrentAverageAge() * state->currentCount + client.getAge();
         newAverage /= (state->currentCount + 1);
         if (newAverage > maxAverageAge) {
-            std::cout << "Adding client " << client.getId() << " would exceed maximum average age" << std::endl;
+            std::cout << "Adding client " << client.getId()
+                      << " would exceed maximum average age (would be " << newAverage
+                      << ", limit is " << maxAverageAge << ")" << std::endl;
             return false;
         }
     }
 
-    state->clients[state->currentCount++] = &client;
-    std::cout << "Client " << client.getId() << " entered the pool" << std::endl;
+    ClientData &newClient = state->clients[state->currentCount];
+    newClient.id = client.getId();
+    newClient.age = client.getAge();
+    newClient.isVip = client.getIsVip();
+    newClient.hasSwimDiaper = client.getHasSwimDiaper();
+    newClient.hasGuardian = client.getHasGuardian();
+    newClient.guardianId = client.getGuardianId();
+
+    state->currentCount++;
     return true;
 }
 
@@ -117,11 +125,11 @@ void Pool::leave(int clientId) {
     ScopedLock stateLock(stateMutex);
 
     for (int i = 0; i < state->currentCount; i++) {
-        if (state->clients[i]->getId() == clientId) {
-            if (state->clients[i]->getGuardianId() == -1) {
+        if (state->clients[i].id == clientId) {
+            if (state->clients[i].guardianId == -1) {
                 for (int j = 0; j < state->currentCount; j++) {
-                    if (state->clients[j]->getGuardianId() == clientId) {
-                        std::cout << "Dependent " << state->clients[j]->getId()
+                    if (state->clients[j].guardianId == clientId) {
+                        std::cout << "Dependent " << state->clients[j].id
                                   << " leaving with guardian " << clientId << std::endl;
                         state->clients[j] = state->clients[--state->currentCount];
                         j--;
@@ -136,13 +144,11 @@ void Pool::leave(int clientId) {
 }
 
 double Pool::getCurrentAverageAge() const {
-    ScopedLock stateLock(stateMutex);
-
     if (state->currentCount == 0) return 0;
 
     int sum = 0;
     for (int i = 0; i < state->currentCount; i++) {
-        sum += state->clients[i]->getAge();
+        sum += state->clients[i].age;
     }
     return static_cast<double>(sum) / state->currentCount;
 }

@@ -17,11 +17,9 @@ private:
     void waitForEmptyPool();
     void handleEmergency();
 
-    void cleanup();
 
 public:
     explicit Lifeguard(Pool* pool);
-    ~Lifeguard() { cleanup(); };
 
     void run();
     void closePool();   // signal1

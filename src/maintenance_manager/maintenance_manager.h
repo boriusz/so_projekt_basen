@@ -18,7 +18,6 @@ public:
 
     void startMaintenance();
     void endMaintenance();
-    bool isMaintenanceInProgress() const { return maintenanceInProgress.load(); }
 
     MaintenanceManager(const MaintenanceManager&) = delete;
     MaintenanceManager& operator=(const MaintenanceManager&) = delete;
