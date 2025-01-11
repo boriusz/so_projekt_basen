@@ -25,12 +25,13 @@ private:
     static std::unique_ptr<UIManager> instance;
     std::atomic<bool> isRunning;
     std::thread displayThread;
-    std::thread inputThread;
     std::atomic<bool> shouldRun;
     std::mutex displayMutex;
     int shmId;
 
     UIManager();
+
+    static bool tryAttachToSharedMemory();
 
     void clearScreen();
 
@@ -40,9 +41,13 @@ private:
 
     void initSharedMemory();
 
-    void handleInput();
-
 public:
+    void startMonitoring();
+
+    std::thread& getDisplayThread() { return displayThread; }
+
+    static bool checkIfMainProcessRunning();
+
     static UIManager *getInstance();
 
     void start();

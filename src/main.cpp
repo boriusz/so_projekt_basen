@@ -9,7 +9,6 @@
 #include <vector>
 #include <iostream>
 #include "maintenance_manager.h"
-#include "ui_manager.h"
 #include "signal_handler.h"
 
 int shmId = -1;
@@ -171,9 +170,6 @@ int main() {
 
         auto poolManager = PoolManager::getInstance();
         poolManager->initialize();
-
-        auto uiManager = UIManager::getInstance();
-        uiManager->start();
 
         processes.push_back(createLifeguard(Pool::PoolType::Olympic));
         processes.push_back(createLifeguard(Pool::PoolType::Recreational));

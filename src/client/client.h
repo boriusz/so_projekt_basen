@@ -3,8 +3,6 @@
 
 #include <vector>
 
-class Pool;
-
 #include "pool.h"
 #include "ticket.h"
 

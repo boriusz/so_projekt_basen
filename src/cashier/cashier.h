@@ -2,6 +2,8 @@
 #define SO_PROJEKT_BASEN_CASHIER_H
 
 #include "shared_memory.h"
+#include "ticket.h"
+#include <vector>
 
 struct ClientRequest {
     long mtype;      // 1 regular client, 2 dla VIP

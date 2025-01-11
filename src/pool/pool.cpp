@@ -1,7 +1,6 @@
 #include "pool.h"
 #include "client.h"
 #include <sys/sem.h>
-#include <cstring>
 #include <iostream>
 #include "error_handler.h"
 

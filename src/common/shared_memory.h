@@ -9,8 +9,6 @@
 
 class Client;
 
-#include "client.h"
-
 struct ClientData {
     int id;
     int age;

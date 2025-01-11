@@ -1,6 +1,5 @@
 #include "ui_manager.h"
 #include "working_hours_manager.h"
-#include "maintenance_manager.h"
 #include <iostream>
 #include <iomanip>
 #include <unistd.h>
@@ -115,18 +114,6 @@ void UIManager::start() {
         std::cout << "Display thread stopping" << std::endl;
         isRunning.store(false);
     });
-
-    inputThread = std::thread([this]() {
-        std::cout << "Input thread started" << std::endl;
-        while (shouldRun.load()) {
-            try {
-                handleInput();
-            } catch (const std::exception &e) {
-                std::cerr << "Error in input thread: " << e.what() << std::endl;
-            }
-        }
-        std::cout << "Input thread stopping" << std::endl;
-    });
 }
 
 void UIManager::displayPoolState(Pool *pool) {
@@ -180,11 +167,74 @@ void UIManager::displayPoolState(Pool *pool) {
     shmdt(shm);
 }
 
-void UIManager::handleInput() {
-    char input;
-    if (std::cin.get(input)) {
-        if (input == 'm' || input == 'M') {
-            MaintenanceManager::getInstance()->requestMaintenance();
-        }
+
+void UIManager::startMonitoring() {
+    if (!checkIfMainProcessRunning()) {
+        throw std::runtime_error("Main process is not running");
     }
+
+    shouldRun.store(true);
+    isRunning.store(true);
+
+    displayThread = std::thread([this]() {
+        while (shouldRun.load() && checkIfMainProcessRunning()) {
+            try {
+                clearScreen();
+
+                auto poolManager = PoolManager::getInstance();
+                if (!poolManager) {
+                    std::cerr << "Failed to get pool manager" << std::endl;
+                    continue;
+                }
+
+                time_t now;
+                time(&now);
+                struct tm *timeinfo = localtime(&now);
+
+                std::cout << Color::MAGENTA << "Swimming Pool Monitor - "
+                          << std::put_time(timeinfo, "%H:%M:%S") << Color::RESET << "\n\n";
+
+                std::cout << "Status: " << (WorkingHoursManager::isOpen() ?
+                                            Color::GREEN + "OPEN" : Color::RED + "CLOSED")
+                          << Color::RESET << "\n\n";
+
+                auto pools = {
+                        poolManager->getPool(Pool::PoolType::Olympic),
+                        poolManager->getPool(Pool::PoolType::Recreational),
+                        poolManager->getPool(Pool::PoolType::Children)
+                };
+
+                for (auto pool: pools) {
+                    if (pool) {
+                        displayPoolState(pool);
+                        std::cout << std::string(50, '-') << "\n";
+                    }
+                }
+
+                displayQueueState();
+                std::cout << "\nPress Ctrl+C to exit\n";
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            } catch (const std::exception &e) {
+                std::cerr << "Display error: " << e.what() << std::endl;
+                break;
+            }
+        }
+        isRunning.store(false);
+    });
+}
+
+bool UIManager::checkIfMainProcessRunning() {
+    return tryAttachToSharedMemory();
+}
+
+bool UIManager::tryAttachToSharedMemory() {
+    int shmId = shmget(SHM_KEY, sizeof(SharedMemory), 0666);
+    if (shmId < 0) return false;
+
+    void *shm = shmat(shmId, nullptr, 0);
+    if (shm == (void *) -1) return false;
+
+    shmdt(shm);
+    return true;
 }
