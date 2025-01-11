@@ -25,6 +25,7 @@ private:
     static std::unique_ptr<UIManager> instance;
     std::atomic<bool> isRunning;
     std::thread displayThread;
+    std::thread inputThread;
     std::atomic<bool> shouldRun;
     std::mutex displayMutex;
     int shmId;
@@ -38,6 +39,8 @@ private:
     void displayPoolState(Pool *pool);
 
     void initSharedMemory();
+
+    void handleInput();
 
 public:
     static UIManager *getInstance();

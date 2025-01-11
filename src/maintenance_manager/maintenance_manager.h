@@ -8,19 +8,27 @@
 
 class MaintenanceManager {
 private:
-    static MaintenanceManager* instance;
+    static MaintenanceManager *instance;
     std::atomic<bool> maintenanceInProgress;
+    std::atomic<bool> maintenanceRequested{false};
+    std::mutex maintenanceMutex;
+    std::condition_variable cv;
 
     MaintenanceManager() : maintenanceInProgress(false) {}
 
+
 public:
-    static MaintenanceManager* getInstance();
+    static MaintenanceManager *getInstance();
 
     void startMaintenance();
+
     void endMaintenance();
 
-    MaintenanceManager(const MaintenanceManager&) = delete;
-    MaintenanceManager& operator=(const MaintenanceManager&) = delete;
+    void requestMaintenance();
+
+    MaintenanceManager(const MaintenanceManager &) = delete;
+
+    MaintenanceManager &operator=(const MaintenanceManager &) = delete;
 };
 
 #endif

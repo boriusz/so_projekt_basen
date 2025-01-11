@@ -98,7 +98,6 @@ bool Pool::enter(Client &client) {
     }
 
     if (maxAverageAge > 0) {
-        ScopedLock avgLock(avgAgeMutex);
         double newAverage = getCurrentAverageAge() * state->currentCount + client.getAge();
         newAverage /= (state->currentCount + 1);
         if (newAverage > maxAverageAge) {
@@ -172,4 +171,17 @@ void Pool::reopenAfterMaintenance() {
     ScopedLock stateLock(stateMutex);
     state->isUnderMaintenance = false;
     state->isClosed = false;
+}
+
+std::string Pool::getName() {
+    if (poolType == PoolType::Recreational) {
+        return "Recreational";
+    }
+    if (poolType == PoolType::Olympic) {
+        return "Olympic";
+    }
+    if (poolType == PoolType::Children) {
+        return "Children";
+    }
+    return "";
 }

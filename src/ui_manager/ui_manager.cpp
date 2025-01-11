@@ -1,5 +1,6 @@
 #include "ui_manager.h"
 #include "working_hours_manager.h"
+#include "maintenance_manager.h"
 #include <iostream>
 #include <iomanip>
 #include <unistd.h>
@@ -102,7 +103,7 @@ void UIManager::start() {
                 }
 
                 displayQueueState();
-                std::cout << "\nControls:\nCtrl+C - Exit\n";
+                std::cout << "\nControls:\nCtrl+C - Exit\nM - Force maintenance\n";
 
                 std::cout.flush();  // Wymuszamy flush bufora
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -113,6 +114,18 @@ void UIManager::start() {
         }
         std::cout << "Display thread stopping" << std::endl;
         isRunning.store(false);
+    });
+
+    inputThread = std::thread([this]() {
+        std::cout << "Input thread started" << std::endl;
+        while (shouldRun.load()) {
+            try {
+                handleInput();
+            } catch (const std::exception &e) {
+                std::cerr << "Error in input thread: " << e.what() << std::endl;
+            }
+        }
+        std::cout << "Input thread stopping" << std::endl;
     });
 }
 
@@ -165,4 +178,13 @@ void UIManager::displayPoolState(Pool *pool) {
     }
 
     shmdt(shm);
+}
+
+void UIManager::handleInput() {
+    char input;
+    if (std::cin.get(input)) {
+        if (input == 'm' || input == 'M') {
+            MaintenanceManager::getInstance()->requestMaintenance();
+        }
+    }
 }

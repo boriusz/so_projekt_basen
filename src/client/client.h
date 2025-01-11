@@ -29,7 +29,7 @@ public:
     Client(int id, int age, bool isVip, bool hasSwimDiaper = false,
            bool hasGuardian = false, int guardianId = -1);
 
-    ~Client();
+    ~Client() = default;
 
     void addDependent(Client *dependent);
 

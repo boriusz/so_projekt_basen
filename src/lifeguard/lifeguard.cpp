@@ -80,7 +80,7 @@ void Lifeguard::handleEmergency() {
 }
 
 void Lifeguard::closePool() {
-    std::cout << "Lifeguard: Closing pool!" << std::endl;
+    std::cout << "Lifeguard: Closing pool! " << pool->getName() << std::endl;
     poolClosed.store(true);
 
     pthread_mutex_lock(&stateMutex);

@@ -82,7 +82,7 @@ pid_t createClientWithPossibleDependent(int &clientId) {
     int newId = clientId++;
 
     pid_t pid = fork();
-    srand(time(NULL) ^ (pid << 16));
+    srand(time(nullptr) ^ (pid << 16));
     if (pid == 0) {
         try {
             SignalHandler::setChildProcess();
@@ -91,9 +91,9 @@ pid_t createClientWithPossibleDependent(int &clientId) {
             int age;
 
             if (isGuardian) {
-                age = 18 + (rand() % 52); // 18-70 lat
+                age = 18 + (rand() % 52);
             } else {
-                age = 10 + (rand() % 60); // 10-70 lat
+                age = 10 + (rand() % 60);
             }
 
             bool isVip = (rand() % 100 < 10);
@@ -107,7 +107,7 @@ pid_t createClientWithPossibleDependent(int &clientId) {
                 for (int i = 0; i < numChildren; i++) {
                     int childAge = (rand() % 9) + 1;
                     bool needsDiaper = childAge <= 3;
-                    Client *child = new Client(newId, childAge, isVip, needsDiaper, true, client->getId());
+                    Client *child = new Client(clientId++, childAge, isVip, needsDiaper, true, client->getId());
                     client->addDependent(child);
                 }
             }

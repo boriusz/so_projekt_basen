@@ -40,6 +40,8 @@ public:
 
     void reopenAfterMaintenance();
 
+    std::string getName();
+
 
 private:
     int shmId;

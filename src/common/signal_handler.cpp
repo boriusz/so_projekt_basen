@@ -1,4 +1,3 @@
-// signal_handler.cpp
 #include "signal_handler.h"
 #include "shared_memory.h"
 #include <iostream>
