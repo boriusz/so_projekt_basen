@@ -3,6 +3,7 @@
 #include "pool_manager.h"
 #include "error_handler.h"
 #include "working_hours_manager.h"
+#include "ticket.h"
 #include <iostream>
 #include <sys/msg.h>
 #include <unistd.h>
@@ -42,7 +43,7 @@ void Client::addDependent(Client *dependent) {
     dependent->guardianId = this->id;
 }
 
-void Client::handleLifeguardSignal() {
+void Client::handleIncomingMessages() {
     Message msg;
 
     if (msgrcv(msgId, &msg, sizeof(Message) - sizeof(long), id, IPC_NOWAIT) >= 0) {
@@ -54,6 +55,15 @@ void Client::handleLifeguardSignal() {
                 }
                 currentPool = nullptr;
             }
+        } else if (msg.signal == 3) {
+            ticket = std::make_unique<Ticket>(
+                    msg.ticketData.id,
+                    msg.ticketData.clientId,
+                    msg.ticketData.validityTime,
+                    msg.ticketData.issueTime,
+                    msg.ticketData.isVip,
+                    msg.ticketData.isChild
+            );
         }
     }
 }
@@ -112,12 +122,20 @@ void Client::run() {
     signal(SIGTERM, [](int) { exit(0); });
 
     while (true) {
-        handleLifeguardSignal();
+        handleIncomingMessages();
 
-        if (!currentPool) {
+        if (currentPool && !ticket->isValid()) {
+            std::cout << "Client " << id << " must leave the pool - ticket expired "
+                      << "(was valid for " << ticket->getValidityTime()
+                      << " minutes)" << std::endl;
+            currentPool->leave(id);
+            for (auto dependent: dependents) {
+                currentPool->leave(dependent->id);
+            }
+            currentPool = nullptr;
+            break;
+        } else if (!currentPool) {
             moveToAnotherPool();
         }
-
-        sleep(1);
     }
 }

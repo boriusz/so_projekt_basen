@@ -26,6 +26,8 @@ add_executable(swimming_pool
         src/common/shared_memory.h
         src/common/signal_handler.h
         src/common/signal_handler.cpp
+        src/ticket/ticket.cpp
+        src/ticket/ticket.h
 )
 
 target_include_directories(swimming_pool PRIVATE
@@ -40,6 +42,7 @@ target_include_directories(swimming_pool PRIVATE
         ${CMAKE_SOURCE_DIR}/src/maintenance_manager
         ${CMAKE_SOURCE_DIR}/src/error_handler
         ${CMAKE_SOURCE_DIR}/src/ui_manager
+        ${CMAKE_SOURCE_DIR}/src/ticket
 )
 
 find_package(Threads REQUIRED)

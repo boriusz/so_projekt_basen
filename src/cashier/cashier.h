@@ -11,15 +11,6 @@ struct ClientRequest {
     bool hasSwimDiaper;
 };
 
-struct Ticket {
-    int id;
-    int clientId;
-    int validityTime;
-    time_t issueTime;
-    bool isVip;
-    bool isChild;
-};
-
 class Cashier {
 private:
     int msgId;

@@ -50,7 +50,15 @@ struct SharedMemory {
 struct Message {
     long mtype;
     int poolId;  // 0: olympic, 1: recreational, 2: kids
-    int signal;  // 1: evacuate, 2: return
+    int signal;  // 1: evacuate, 2: return, 3: ticket issued
+    struct TicketData {
+        int id;
+        int clientId;
+        time_t issueTime;
+        int validityTime;
+        bool isVip;
+        bool isChild;
+    } ticketData;
 };
 
 const key_t SHM_KEY = 6969;
@@ -64,6 +72,5 @@ enum Semaphores {
     SEM_ENTRANCE_QUEUE = 3,
     SEM_COUNT = 4
 };
-
 
 #endif

@@ -1,6 +1,7 @@
 #include "cashier.h"
 #include "working_hours_manager.h"
 #include "error_handler.h"
+#include "shared_memory.h"
 #include <sys/msg.h>
 #include <iostream>
 #include <ctime>
@@ -82,10 +83,20 @@ ClientRequest Cashier::getNextClient() {
 
     ClientRequest nextClient = {0};
     if (queue->queueSize > 0) {
-        nextClient.clientId = queue->queue[0].clientId;
-        nextClient.mtype = queue->queue[0].isVip ? 2 : 1;
+        int vipIndex = -1;
+        for (int i = 0; i < queue->queueSize; i++) {
+            if (queue->queue[i].isVip) {
+                vipIndex = i;
+                break;
+            }
+        }
 
-        for (int i = 0; i < queue->queueSize - 1; i++) {
+        int selectedIndex = (vipIndex != -1) ? vipIndex : 0;
+
+        nextClient.clientId = queue->queue[selectedIndex].clientId;
+        nextClient.mtype = queue->queue[selectedIndex].isVip ? 2 : 1;
+
+        for (int i = selectedIndex; i < queue->queueSize - 1; i++) {
             queue->queue[i] = queue->queue[i + 1];
         }
         queue->queueSize--;
@@ -119,25 +130,46 @@ void Cashier::processNextClient() {
         return;
     }
 
-    Ticket ticket;
-    ticket.id = currentTicketNumber++;
-    ticket.clientId = client.clientId;
-    ticket.isVip = (client.mtype == 2);
-    ticket.isChild = (client.age < 10);
-    ticket.validityTime = 120;
-    time(&ticket.issueTime);
+    time_t currentTime;
+    time(&currentTime);
 
-    activeTickets.push_back(ticket);
+    auto ticket = std::make_unique<Ticket>(
+            currentTicketNumber++,
+            client.clientId,
+            120,
+            currentTime,
+            (client.mtype == 2),
+            (client.age < 10)
+    );
 
-    std::cout << "Issued ticket " << ticket.id << " for client " << client.clientId
-              << (ticket.isVip ? " (VIP)" : "")
-              << (ticket.isChild ? " (Child - free entry)" : "") << std::endl;
+    Message msg;
+    msg.mtype = client.clientId;
+    msg.signal = 3;
+    msg.ticketData = {
+            ticket->getId(),
+            ticket->getClientId(),
+            ticket->getIssueTime(),
+            ticket->getValidityTime(),
+            ticket->getIsVip(),
+            ticket->getIsChild()
+    };
+
+    if (msgsnd(msgId, &msg, sizeof(Message) - sizeof(long), 0) == -1) {
+        perror("Failed to send ticket to client");
+        return;
+    }
+
+    activeTickets.push_back(*ticket);
+
+    std::cout << "Issued ticket " << ticket->getId() << " for client " << client.clientId
+              << (ticket->getIsVip() ? " (VIP)" : "")
+              << (ticket->getIsChild() ? " (Child - free entry)" : "") << std::endl;
 }
 
 bool Cashier::isTicketValid(const Ticket &ticket) const {
     time_t now;
     time(&now);
-    return (now - ticket.issueTime) < (ticket.validityTime * 60);
+    return (now - ticket.getIssueTime()) < (ticket.getValidityTime() * 60);
 }
 
 
@@ -145,7 +177,7 @@ void Cashier::removeExpiredTickets() {
     auto it = activeTickets.begin();
     while (it != activeTickets.end()) {
         if (!isTicketValid(*it)) {
-            std::cout << "Ticket " << it->id << " for client " << it->clientId << " has expired" << std::endl;
+            std::cout << "Ticket " << it->getId() << " for client " << it->getClientId() << " has expired" << std::endl;
             it = activeTickets.erase(it);
         } else {
             ++it;
