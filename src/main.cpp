@@ -19,23 +19,21 @@ std::vector<pid_t> processes;
 std::atomic<bool> shouldRun(true);
 
 void initializeIPC() {
-    shmId = shmget(SHM_KEY, sizeof(SharedMemory), IPC_CREAT | 0666);
-    if (shmId < 0) {
-        perror("shmget failed");
-        exit(1);
-    }
-
     semId = semget(SEM_KEY, SEM_COUNT, IPC_CREAT | 0666);
     if (semId < 0) {
         perror("semget failed");
         exit(1);
     }
 
-    for (int i = 0; i < SEM_COUNT; i++) {
-        if (semctl(semId, i, SETVAL, 1) == -1) {
-            perror("semctl failed");
-            exit(1);
-        }
+    if (semctl(semId, SEM_INIT, SETVAL, 0) == -1) {
+        perror("semctl init failed");
+        exit(1);
+    }
+
+    shmId = shmget(SHM_KEY, sizeof(SharedMemory), IPC_CREAT | 0666);
+    if (shmId < 0) {
+        perror("shmget failed");
+        exit(1);
     }
 
     msgId = msgget(MSG_KEY, IPC_CREAT | 0666);
@@ -45,14 +43,11 @@ void initializeIPC() {
         exit(1);
     }
 
-    struct sembuf op;
-    op.sem_num = SEM_INIT;
-    op.sem_op = 0;
-    op.sem_flg = 0;
-
-    if (semctl(semId, SEM_INIT, SETVAL, 0) == -1) {
-        perror("semctl init failed");
-        exit(1);
+    for (int i = 0; i < SEM_COUNT; i++) {
+        if (semctl(semId, i, SETVAL, 1) == -1) {
+            perror("semctl failed");
+            exit(1);
+        }
     }
 }
 
@@ -73,13 +68,16 @@ pid_t createLifeguard(Pool::PoolType poolType) {
 pid_t createCashier() {
     pid_t pid = fork();
     if (pid == 0) {
-        Cashier cashier;
-        cashier.run();
-        SignalHandler::setChildProcess();
-        SignalHandler::setChildCleanupHandler([cashier]() {
-            delete &cashier;
-        });
-        exit(0);
+        try {
+            Cashier cashier;
+            SignalHandler::setChildProcess();
+            SignalHandler::setChildCleanupHandler([]() {});
+            cashier.run();
+            exit(0);
+        } catch (const std::exception& e) {
+            std::cerr << "Error in cashier process: " << e.what() << std::endl;
+            exit(1);
+        }
     }
     return pid;
 }

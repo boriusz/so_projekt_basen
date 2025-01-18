@@ -52,8 +52,6 @@ void Lifeguard::notifyClients(int signal) {
         operations[0].sem_op = -1;
         operations[0].sem_flg = SEM_UNDO;
 
-        std::cout << "Locking semaphore " << semNum << " for pool " << pool->getName() << std::endl;
-
         checkSystemCall(semop(semId, operations, 1), "Failed to lock pool state");
 
         if (state->currentCount > 0) {
@@ -66,7 +64,7 @@ void Lifeguard::notifyClients(int signal) {
                 msg.signal = signal;
                 msg.poolId = static_cast<int>(pool->getType());
 
-                if (msgsnd(msgId, &msg, sizeof(Message), 0) == -1) {
+                if (msgsnd(msgId, &msg, sizeof(Message) - sizeof(long), 0) == -1) {
                     perror("Failed to send message to client");
                     continue;
                 }

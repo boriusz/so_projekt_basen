@@ -50,17 +50,7 @@ void Client::addDependent(Client *dependent) {
 }
 
 void Client::waitForTicket() {
-    struct sembuf op;
-    op.sem_num = SEM_INIT;
-    op.sem_op = 0;
-    op.sem_flg = 0;
-
-    if (semop(semId, &op, 1) == -1) {
-        perror("Failed to wait for cashier");
-        exit(1);
-    }
-
-    ClientRequest request;
+    ClientRequest request = {};
     request.mtype = isVip ? 2 : 1;
     request.data = {
             .clientId = id,
@@ -70,22 +60,24 @@ void Client::waitForTicket() {
             .isVip = isVip ? 1 : 0
     };
 
-    std::cout << "DEBUG: Client " << id << " sending ticket request (type="
-              << request.mtype << ")" << std::endl;
 
     if (msgsnd(msgId, &request, sizeof(request.data), 0) == -1) {
         perror("Failed to send ticket request");
         exit(1);
     }
 
-    Message response;
+    Message response = {};
     while (true) {
+        std::cout << "Client #" << id << " waiting for message id #" << id << std::endl;
         if (msgrcv(msgId, &response, sizeof(Message) - sizeof(long), id, 0) == -1) {
             perror("Failed to receive ticket");
             exit(1);
         }
 
-        if (response.signal == 3) {
+        std::cout << "Client #" << id << " received a message with id" << response.mtype << " containing ticket #"
+                  << response.ticketData.id << std::endl;
+
+        if (response.signal == 3 && response.mtype == id) {
             ticket = std::make_unique<Ticket>(
                     response.ticketData.id,
                     response.ticketData.clientId,
@@ -94,17 +86,14 @@ void Client::waitForTicket() {
                     response.ticketData.isVip == 1,
                     response.ticketData.isChild == 1
             );
-            std::cout << "DEBUG: Client " << id << " received ticket "
-                      << ticket->getId() << " (validity: "
-                      << ticket->getValidityTime() << " minutes)" << std::endl;
             break;
         }
     }
 }
 
 void Client::handleEvacuationSignals() {
-    Message msg;
-    ssize_t received = msgrcv(msgId, &msg, sizeof(Message), id, IPC_NOWAIT);
+    Message msg{};
+    ssize_t received = msgrcv(msgId, &msg, sizeof(Message) - sizeof(long), id, IPC_NOWAIT);
 
     if (received < 0) {
         if (errno != ENOMSG) {

@@ -62,12 +62,6 @@ void Cashier::addToQueue(const ClientRequest &request) {
         queue->queue[insertPos] = entry;
         queue->queueSize++;
 
-        std::cout << "DEBUG: Added to queue: client=" << entry.clientId
-                  << " at position=" << insertPos
-                  << " (age=" << entry.age
-                  << ", vip=" << entry.isVip
-                  << ")" << std::endl;
-
         op.sem_op = 1;
         checkSystemCall(semop(semId, &op, 1), "semop unlock failed");
 
@@ -109,12 +103,6 @@ ClientRequest Cashier::getNextClient() {
             queue->queue[i] = queue->queue[i + 1];
         }
         queue->queueSize--;
-
-        std::cout << "Selected client " << nextClient.data.clientId
-                  << " from queue (VIP: " << (nextClient.mtype == 2 ? "yes" : "no")
-                  << ", age: " << nextClient.data.age
-                  << ", guardian: " << (nextClient.data.hasGuardian ? "yes" : "no")
-                  << ")" << std::endl;
     } else {
         std::cout << "Queue is empty" << std::endl;
     }
@@ -137,7 +125,6 @@ void Cashier::removeExpiredTickets() {
     auto it = activeTickets.begin();
     while (it != activeTickets.end()) {
         if (!isTicketValid(*it)) {
-            std::cout << "Ticket " << it->getId() << " for client " << it->getClientId() << " has expired" << std::endl;
             it = activeTickets.erase(it);
         } else {
             ++it;
@@ -150,35 +137,22 @@ void Cashier::run() {
     signal(SIGTERM, [](int) { exit(0); });
 
     while (true) {
-        ClientRequest request;
-        ssize_t bytesReceived = msgrcv(msgId, &request, sizeof(request.data), -2, IPC_NOWAIT);
+        ClientRequest request = {};
+
+        ssize_t bytesReceived = msgrcv(msgId, &request, sizeof(request.data), -2, 0);
 
         if (bytesReceived > 0) {
-            std::cout << "Cashier received request from client " << request.data.clientId
-                      << (request.mtype == 2 ? " (VIP)" : "") << std::endl;
-
-            if (!WorkingHoursManager::isOpen()) {
-                std::cout << "Cannot process - outside working hours" << std::endl;
-                continue;
-            }
-
-            time_t currentTime;
-            time(&currentTime);
-
-            Message response;
+            Message response = {};
             response.mtype = request.data.clientId;
             response.signal = 3;
             response.ticketData = {
-                    .id = currentTicketNumber++,
                     .clientId = request.data.clientId,
                     .validityTime = 121,
-                    .issueTime = currentTime,
+                    .issueTime = time(nullptr),
                     .isVip = request.mtype == 2 ? 1 : 0,
                     .isChild = request.data.age < 10 ? 1 : 0
             };
-
-            std::cout << "Sending ticket " << response.ticketData.id
-                      << " to client " << response.ticketData.clientId << std::endl;
+            response.ticketData.id = currentTicketNumber++;
 
             if (msgsnd(msgId, &response, sizeof(Message) - sizeof(long), 0) == -1) {
                 perror("Failed to send ticket");
@@ -195,8 +169,5 @@ void Cashier::run() {
             );
             activeTickets.push_back(*ticket);
         }
-
-        removeExpiredTickets();
-        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 }
