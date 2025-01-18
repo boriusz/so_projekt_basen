@@ -11,6 +11,7 @@ private:
     std::atomic<bool> poolClosed;
     std::atomic<bool> isEmergency;
     int msgId;
+    int semId;
     pthread_mutex_t stateMutex;
 
     void notifyClients(int signal);

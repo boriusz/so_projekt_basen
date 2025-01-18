@@ -29,7 +29,17 @@ UIManager *UIManager::getInstance() {
 }
 
 void UIManager::clearScreen() {
-    std::cout << "\033[2J\033[H" << std::flush;
+    std::cout << "\033[s";
+
+    std::cout << "\033[H";
+
+    std::cout << "\033[J";
+
+    std::cout << "\033[3J";
+
+    std::cout << "\033[u";
+
+    std::cout << std::flush;
 }
 
 void UIManager::displayQueueState() {
@@ -144,7 +154,7 @@ void UIManager::displayPoolState(Pool *pool) {
 
     if (state) {
         std::cout << poolName << "\n";
-        std::cout << "Occupancy: " << state->currentCount << "/100\n";
+        std::cout << "Occupancy: " << state->currentCount << "/" << pool->getCapacity() << "\n";
         std::cout << "Status: " << (state->isClosed ? Color::RED + "CLOSED" : Color::GREEN + "OPEN")
                   << Color::RESET << "\n";
 

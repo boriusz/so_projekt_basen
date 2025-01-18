@@ -62,14 +62,6 @@ Pool::Pool(Pool::PoolType poolType, int capacity, int minAge, int maxAge,
 }
 
 bool Pool::enter(Client &client) {
-    if (client.getAge() < minAge || client.getAge() > maxAge) {
-        std::cout << "Client " << client.getId() << " age (" << client.getAge()
-                  << ") outside pool limits [" << minAge << ", " << maxAge << "]" << std::endl;
-        return false;
-    }
-
-    ScopedLock stateLock(stateMutex);
-
     if (state->isClosed) {
         std::cout << "Pool is closed, client " << client.getId() << " cannot enter" << std::endl;
         return false;
@@ -81,30 +73,41 @@ bool Pool::enter(Client &client) {
     }
 
     if (poolType == PoolType::Children) {
+        if (client.getAge() <= 5) {
+            if (!client.getHasGuardian()) {
+                std::cout << "Child " << client.getId() << " needs a guardian to enter children's pool" << std::endl;
+                return false;
+            }
+        } else {
+            const auto &dependents = client.getDependents();
+            if (dependents.empty()) {
+                std::cout << "Adult " << client.getId() << " can only enter children's pool as a guardian" << std::endl;
+                return false;
+            }
+
+            bool hasValidChild = false;
+            for (const auto &child: dependents) {
+                if (child->getAge() <= 5) {
+                    hasValidChild = true;
+                    break;
+                }
+            }
+            if (!hasValidChild) {
+                std::cout << "Guardian " << client.getId() << " has no children under 5 years old" << std::endl;
+                return false;
+            }
+        }
+
         if (client.getAge() <= 3 && !client.getHasSwimDiaper()) {
             std::cout << "Child " << client.getId() << " needs swim diapers" << std::endl;
             return false;
         }
-        if (client.getAge() > 5 && !client.getHasGuardian()) {
-            std::cout << "Child " << client.getId() << " needs a guardian" << std::endl;
-            return false;
-        }
     }
 
-    if (client.getAge() < 10 && !client.getHasGuardian() && needsSupervision) {
-        std::cout << "Child " << client.getId() << " needs supervision" << std::endl;
+    if (client.getAge() < minAge || client.getAge() > maxAge) {
+        std::cout << "Client " << client.getId() << " age (" << client.getAge()
+                  << ") outside pool limits [" << minAge << ", " << maxAge << "]" << std::endl;
         return false;
-    }
-
-    if (maxAverageAge > 0) {
-        double newAverage = getCurrentAverageAge() * state->currentCount + client.getAge();
-        newAverage /= (state->currentCount + 1);
-        if (newAverage > maxAverageAge) {
-            std::cout << "Adding client " << client.getId()
-                      << " would exceed maximum average age (would be " << newAverage
-                      << ", limit is " << maxAverageAge << ")" << std::endl;
-            return false;
-        }
     }
 
     ClientData &newClient = state->clients[state->currentCount];

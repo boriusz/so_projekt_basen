@@ -57,6 +57,7 @@ target_include_directories(monitor PRIVATE
         ${CMAKE_SOURCE_DIR}/src/monitor
         ${CMAKE_SOURCE_DIR}/src/ticket
         ${CMAKE_SOURCE_DIR}/src/client
+        ${CMAKE_SOURCE_DIR}/src/cashier
 )
 
 target_compile_definitions(monitor PRIVATE MONITOR_BUILD)

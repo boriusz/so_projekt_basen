@@ -40,7 +40,18 @@ void initializeIPC() {
 
     msgId = msgget(MSG_KEY, IPC_CREAT | 0666);
     if (msgId < 0) {
-        perror("msgget failed");
+        std::cerr << "DEBUG: msgget failed with errno=" << errno
+                  << " (" << strerror(errno) << ")" << std::endl;
+        exit(1);
+    }
+
+    struct sembuf op;
+    op.sem_num = SEM_INIT;
+    op.sem_op = 0;
+    op.sem_flg = 0;
+
+    if (semctl(semId, SEM_INIT, SETVAL, 0) == -1) {
+        perror("semctl init failed");
         exit(1);
     }
 }
@@ -62,12 +73,12 @@ pid_t createLifeguard(Pool::PoolType poolType) {
 pid_t createCashier() {
     pid_t pid = fork();
     if (pid == 0) {
-        SignalHandler::setChildProcess();
-        SignalHandler::setChildCleanupHandler([]() {
-            std::cout << "Cashier cleanup" << std::endl;
-        });
         Cashier cashier;
         cashier.run();
+        SignalHandler::setChildProcess();
+        SignalHandler::setChildCleanupHandler([cashier]() {
+            delete &cashier;
+        });
         exit(0);
     }
     return pid;
@@ -78,7 +89,16 @@ pid_t createClientWithPossibleDependent(int &clientId) {
         return -1;
     }
 
-    int newId = clientId++;
+    int guardianId = clientId++;
+
+    std::vector<int> childrenIds;
+    bool isGuardian = (rand() % 100 < 30);
+    if (isGuardian) {
+        int numChildren = rand() % 3 + 1;
+        for (int i = 0; i < numChildren; i++) {
+            childrenIds.push_back(clientId++);
+        }
+    }
 
     pid_t pid = fork();
     srand(time(nullptr) ^ (pid << 16));
@@ -86,7 +106,6 @@ pid_t createClientWithPossibleDependent(int &clientId) {
         try {
             SignalHandler::setChildProcess();
 
-            bool isGuardian = (rand() % 100 < 30);
             int age;
 
             if (isGuardian) {
@@ -96,17 +115,15 @@ pid_t createClientWithPossibleDependent(int &clientId) {
             }
 
             bool isVip = (rand() % 100 < 10);
-            std::cout << "Creating new client with ID: " << newId << ", age: " << age
-                      << (isVip ? " (VIP)" : "") << std::endl;
 
-            Client *client = new Client(newId, age, isVip);
+            Client *client = new Client(guardianId, age, isVip);
+            client->setAsGuardian(isGuardian);
 
-            if (isGuardian) {
-                int numChildren = rand() % 3 + 1;
-                for (int i = 0; i < numChildren; i++) {
+            if (isGuardian && !childrenIds.empty()) {
+                for (int childId: childrenIds) {
                     int childAge = (rand() % 9) + 1;
                     bool needsDiaper = childAge <= 3;
-                    Client *child = new Client(clientId++, childAge, isVip, needsDiaper, true, client->getId());
+                    Client *child = new Client(childId, childAge, isVip, needsDiaper, true, client->getId());
                     client->addDependent(child);
                 }
             }

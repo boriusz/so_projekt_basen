@@ -6,11 +6,14 @@
 #include <vector>
 
 struct ClientRequest {
-    long mtype;      // 1 regular client, 2 dla VIP
-    int clientId;
-    int age;
-    bool hasGuardian;
-    bool hasSwimDiaper;
+    long mtype; // 1 - regular, 2 - VIP
+    struct {
+        int clientId;
+        int age;
+        int hasGuardian;
+        int hasSwimDiaper;
+        int isVip;
+    } data;
 };
 
 class Cashier {
@@ -21,9 +24,8 @@ private:
     std::vector<Ticket> activeTickets;
     EntranceQueue *queue;
 
-    void processNextClient();
+    bool isTicketValid(const Ticket &ticket) const;
 
-    bool isTicketValid(const Ticket& ticket) const;
     void removeExpiredTickets();
 
     void addToQueue(const ClientRequest &request);

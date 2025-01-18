@@ -13,8 +13,8 @@ PoolManager* PoolManager::getInstance() {
 
 void PoolManager::initialize() {
     olympicPool = std::make_unique<Pool>(Pool::PoolType::Olympic, 100, 18, 70);
-    recreationalPool = std::make_unique<Pool>(Pool::PoolType::Recreational, 100, 0, 70, 40);
-    kidsPool = std::make_unique<Pool>(Pool::PoolType::Children, 100, 0, 5);
+    recreationalPool = std::make_unique<Pool>(Pool::PoolType::Recreational, 40, 0, 70, 40);
+    kidsPool = std::make_unique<Pool>(Pool::PoolType::Children, 20, 0, 70);
 }
 
 Pool* PoolManager::getPool(Pool::PoolType type) {

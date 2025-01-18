@@ -40,6 +40,8 @@ public:
 
     void reopenAfterMaintenance();
 
+    int getCapacity() { return capacity; }
+
     std::string getName();
 
 

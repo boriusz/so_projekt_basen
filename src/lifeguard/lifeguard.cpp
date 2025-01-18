@@ -6,6 +6,7 @@
 #include <chrono>
 #include <sys/msg.h>
 #include <ctime>
+#include <unistd.h>
 
 Lifeguard::Lifeguard(Pool *pool) : pool(pool), poolClosed(false), isEmergency(false) {
     try {
@@ -15,6 +16,9 @@ Lifeguard::Lifeguard(Pool *pool) : pool(pool), poolClosed(false), isEmergency(fa
         msgId = msgget(MSG_KEY, 0666);
         checkSystemCall(msgId, "msgget failed in Lifeguard");
 
+        semId = semget(SEM_KEY, SEM_COUNT, 0666);
+        checkSystemCall(semId, "semget failed in Lifeguard");
+
     } catch (const std::exception &e) {
         std::cerr << "Error initializing Lifeguard: " << e.what() << std::endl;
         throw;
@@ -22,27 +26,82 @@ Lifeguard::Lifeguard(Pool *pool) : pool(pool), poolClosed(false), isEmergency(fa
 }
 
 void Lifeguard::notifyClients(int signal) {
+    int semNum;
+    switch (pool->getType()) {
+        case Pool::PoolType::Olympic:
+            semNum = SEM_OLYMPIC;
+            break;
+        case Pool::PoolType::Recreational:
+            semNum = SEM_RECREATIONAL;
+            break;
+        case Pool::PoolType::Children:
+            semNum = SEM_KIDS;
+            break;
+        default:
+            throw PoolError("Unknown pool type");
+    }
+
     try {
         PoolState *state = pool->getState();
-
-        checkSystemCall(pthread_mutex_lock(&stateMutex),
-                        "Failed to lock state mutex");
-
-        for (int i = 0; i < state->currentCount; i++) {
-            Message msg;
-            msg.mtype = state->clients[i].id;
-            msg.signal = signal;
-            msg.poolId = static_cast<int>(pool->getType());
-
-            checkSystemCall(msgsnd(msgId, &msg, sizeof(Message) - sizeof(long), 0),
-                            "Failed to send message to client");
+        if (!state) {
+            throw PoolError("Invalid pool state");
         }
 
-        checkSystemCall(pthread_mutex_unlock(&stateMutex),
-                        "Failed to unlock state mutex");
+        struct sembuf operations[1];
+        operations[0].sem_num = semNum;
+        operations[0].sem_op = -1;
+        operations[0].sem_flg = SEM_UNDO;
+
+        std::cout << "Locking semaphore " << semNum << " for pool " << pool->getName() << std::endl;
+
+        checkSystemCall(semop(semId, operations, 1), "Failed to lock pool state");
+
+        if (state->currentCount > 0) {
+            std::cout << "Notifying " << state->currentCount << " clients in "
+                      << pool->getName() << " pool" << std::endl;
+
+            for (int i = 0; i < state->currentCount; i++) {
+                Message msg;
+                msg.mtype = state->clients[i].id;
+                msg.signal = signal;
+                msg.poolId = static_cast<int>(pool->getType());
+
+                if (msgsnd(msgId, &msg, sizeof(Message), 0) == -1) {
+                    perror("Failed to send message to client");
+                    continue;
+                }
+
+                std::cout << "Sent signal " << signal << " to client "
+                          << state->clients[i].id << std::endl;
+            }
+        }
+
+        operations[0].sem_op = 1;
+        checkSystemCall(semop(semId, operations, 1), "Failed to unlock pool state");
+
+        if (signal == 1) {
+            std::cout << "Waiting for clients to leave the pool..." << std::endl;
+            int maxWaitTime = 10;
+            int waited = 0;
+            while (waited < maxWaitTime && !pool->isEmpty()) {
+                sleep(1);
+                waited++;
+            }
+            if (!pool->isEmpty()) {
+                std::cerr << "Warning: Not all clients left " << pool->getName()
+                          << " pool after " << maxWaitTime << " seconds!" << std::endl;
+            }
+        }
+
     } catch (const std::exception &e) {
-        pthread_mutex_unlock(&stateMutex);
         std::cerr << "Error notifying clients: " << e.what() << std::endl;
+
+        struct sembuf unlock_op[1];
+        unlock_op[0].sem_num = semNum;
+        unlock_op[0].sem_op = 1;
+        unlock_op[0].sem_flg = SEM_UNDO;
+        semop(semId, unlock_op, 1);
+
         throw;
     }
 }

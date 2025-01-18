@@ -2,7 +2,6 @@
 #define SO_PROJEKT_BASEN_CLIENT_H
 
 #include <vector>
-
 #include "pool.h"
 #include "ticket.h"
 
@@ -18,8 +17,14 @@ private:
     std::vector<Client *> dependents;
     int msgId;
     std::unique_ptr<Ticket> ticket;
+    bool hasEvacuated;
 
-    void handleIncomingMessages();
+    int semId;
+
+    bool isGuardian;
+    void waitForTicket();
+
+    void handleEvacuationSignals();
 
     void moveToAnotherPool();
 
@@ -30,6 +35,12 @@ public:
     ~Client() = default;
 
     void addDependent(Client *dependent);
+
+    void setAsGuardian(bool value) { isGuardian = value; }
+
+    bool getIsGuardian() const { return isGuardian; }
+
+    const std::vector<Client *> &getDependents() const { return dependents; };
 
     void run();
 
@@ -44,7 +55,6 @@ public:
     bool getHasSwimDiaper() const { return hasSwimDiaper; }
 
     int getGuardianId() const { return guardianId; }
-
 };
 
 #endif

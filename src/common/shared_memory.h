@@ -31,6 +31,9 @@ struct EntranceQueue {
         int clientId;
         bool isVip;
         time_t arrivalTime;
+        int age;
+        int hasGuardian;
+        int hasSwimDiaper;
     };
     QueueEntry queue[MAX_QUEUE_SIZE];
     int queueSize;
@@ -47,15 +50,15 @@ struct SharedMemory {
 
 struct Message {
     long mtype;
-    int poolId;  // 0: olympic, 1: recreational, 2: kids
-    int signal;  // 1: evacuate, 2: return, 3: ticket issued
-    struct TicketData {
+    int signal;  // 1: evacuate, 2: return, 3: ticket
+    int poolId;
+    struct {
         int id;
         int clientId;
-        time_t issueTime;
         int validityTime;
-        bool isVip;
-        bool isChild;
+        time_t issueTime;
+        int isVip;
+        int isChild;
     } ticketData;
 };
 
@@ -68,7 +71,8 @@ enum Semaphores {
     SEM_RECREATIONAL = 1,
     SEM_KIDS = 2,
     SEM_ENTRANCE_QUEUE = 3,
-    SEM_COUNT = 4
+    SEM_INIT = 4,
+    SEM_COUNT = 5
 };
 
 #endif

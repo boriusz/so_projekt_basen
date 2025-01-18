@@ -40,9 +40,11 @@ void Cashier::addToQueue(const ClientRequest &request) {
             throw PoolError("Queue is full");
         }
 
-
-        EntranceQueue::QueueEntry entry;
-        entry.clientId = request.clientId;
+        EntranceQueue::QueueEntry entry = {};
+        entry.clientId = request.data.clientId;
+        entry.age = request.data.age;
+        entry.hasGuardian = request.data.hasGuardian;
+        entry.hasSwimDiaper = request.data.hasSwimDiaper;
         entry.isVip = (request.mtype == 2);
         time(&entry.arrivalTime);
 
@@ -60,11 +62,15 @@ void Cashier::addToQueue(const ClientRequest &request) {
         queue->queue[insertPos] = entry;
         queue->queueSize++;
 
-        std::cout << "Client " << entry.clientId << (entry.isVip ? " (VIP)" : "")
-                  << " added to queue at position " << insertPos + 1 << std::endl;
+        std::cout << "DEBUG: Added to queue: client=" << entry.clientId
+                  << " at position=" << insertPos
+                  << " (age=" << entry.age
+                  << ", vip=" << entry.isVip
+                  << ")" << std::endl;
 
         op.sem_op = 1;
         checkSystemCall(semop(semId, &op, 1), "semop unlock failed");
+
     } catch (const std::exception &e) {
         std::cerr << "Error adding to queue: " << e.what() << std::endl;
         struct sembuf op = {SEM_ENTRANCE_QUEUE, 1, 0};
@@ -93,13 +99,24 @@ ClientRequest Cashier::getNextClient() {
 
         int selectedIndex = (vipIndex != -1) ? vipIndex : 0;
 
-        nextClient.clientId = queue->queue[selectedIndex].clientId;
+        nextClient.data.clientId = queue->queue[selectedIndex].clientId;
         nextClient.mtype = queue->queue[selectedIndex].isVip ? 2 : 1;
+        nextClient.data.age = queue->queue[selectedIndex].age;
+        nextClient.data.hasGuardian = queue->queue[selectedIndex].hasGuardian;
+        nextClient.data.hasSwimDiaper = queue->queue[selectedIndex].hasSwimDiaper;
 
         for (int i = selectedIndex; i < queue->queueSize - 1; i++) {
             queue->queue[i] = queue->queue[i + 1];
         }
         queue->queueSize--;
+
+        std::cout << "Selected client " << nextClient.data.clientId
+                  << " from queue (VIP: " << (nextClient.mtype == 2 ? "yes" : "no")
+                  << ", age: " << nextClient.data.age
+                  << ", guardian: " << (nextClient.data.hasGuardian ? "yes" : "no")
+                  << ")" << std::endl;
+    } else {
+        std::cout << "Queue is empty" << std::endl;
     }
 
     op.sem_op = 1;
@@ -108,63 +125,6 @@ ClientRequest Cashier::getNextClient() {
     return nextClient;
 }
 
-void Cashier::processNextClient() {
-    ClientRequest client = getNextClient();
-    if (client.clientId == 0) return;
-
-    if (!WorkingHoursManager::isOpen()) {
-        std::cout << "Cannot process client " << client.clientId
-                  << " - outside opening hours" << std::endl;
-        return;
-    }
-
-    if (client.age < 10 && !client.hasGuardian) {
-        std::cout << "Cannot issue ticket for client " << client.clientId
-                  << " - child under 10 needs a guardian!" << std::endl;
-        return;
-    }
-
-    if (client.age <= 3 && !client.hasSwimDiaper) {
-        std::cout << "Cannot issue ticket for client " << client.clientId
-                  << " - child under 3 needs swim diapers!" << std::endl;
-        return;
-    }
-
-    time_t currentTime;
-    time(&currentTime);
-
-    auto ticket = std::make_unique<Ticket>(
-            currentTicketNumber++,
-            client.clientId,
-            120,
-            currentTime,
-            (client.mtype == 2),
-            (client.age < 10)
-    );
-
-    Message msg;
-    msg.mtype = client.clientId;
-    msg.signal = 3;
-    msg.ticketData = {
-            ticket->getId(),
-            ticket->getClientId(),
-            ticket->getIssueTime(),
-            ticket->getValidityTime(),
-            ticket->getIsVip(),
-            ticket->getIsChild()
-    };
-
-    if (msgsnd(msgId, &msg, sizeof(Message) - sizeof(long), 0) == -1) {
-        perror("Failed to send ticket to client");
-        return;
-    }
-
-    activeTickets.push_back(*ticket);
-
-    std::cout << "Issued ticket " << ticket->getId() << " for client " << client.clientId
-              << (ticket->getIsVip() ? " (VIP)" : "")
-              << (ticket->getIsChild() ? " (Child - free entry)" : "") << std::endl;
-}
 
 bool Cashier::isTicketValid(const Ticket &ticket) const {
     time_t now;
@@ -191,14 +151,52 @@ void Cashier::run() {
 
     while (true) {
         ClientRequest request;
-        if (msgrcv(msgId, &request, sizeof(ClientRequest) - sizeof(long), -2, IPC_NOWAIT) >= 0) {
-            addToQueue(request);
+        ssize_t bytesReceived = msgrcv(msgId, &request, sizeof(request.data), -2, IPC_NOWAIT);
+
+        if (bytesReceived > 0) {
+            std::cout << "Cashier received request from client " << request.data.clientId
+                      << (request.mtype == 2 ? " (VIP)" : "") << std::endl;
+
+            if (!WorkingHoursManager::isOpen()) {
+                std::cout << "Cannot process - outside working hours" << std::endl;
+                continue;
+            }
+
+            time_t currentTime;
+            time(&currentTime);
+
+            Message response;
+            response.mtype = request.data.clientId;
+            response.signal = 3;
+            response.ticketData = {
+                    .id = currentTicketNumber++,
+                    .clientId = request.data.clientId,
+                    .validityTime = 121,
+                    .issueTime = currentTime,
+                    .isVip = request.mtype == 2 ? 1 : 0,
+                    .isChild = request.data.age < 10 ? 1 : 0
+            };
+
+            std::cout << "Sending ticket " << response.ticketData.id
+                      << " to client " << response.ticketData.clientId << std::endl;
+
+            if (msgsnd(msgId, &response, sizeof(Message) - sizeof(long), 0) == -1) {
+                perror("Failed to send ticket");
+                continue;
+            }
+
+            auto ticket = std::make_unique<Ticket>(
+                    response.ticketData.id,
+                    response.ticketData.clientId,
+                    response.ticketData.validityTime,
+                    response.ticketData.issueTime,
+                    response.ticketData.isVip == 1,
+                    response.ticketData.isChild == 1
+            );
+            activeTickets.push_back(*ticket);
         }
 
-        processNextClient();
-
         removeExpiredTickets();
-
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 }
