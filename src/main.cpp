@@ -14,6 +14,7 @@
 int shmId = -1;
 int semId = -1;
 int msgId = -1;
+int lifeguardMsgId = -1;
 
 std::vector<pid_t> processes;
 std::atomic<bool> shouldRun(true);
@@ -36,8 +37,15 @@ void initializeIPC() {
         exit(1);
     }
 
-    msgId = msgget(MSG_KEY, IPC_CREAT | 0666);
+    msgId = msgget(CASHIER_MSG_KEY, IPC_CREAT | 0666);
     if (msgId < 0) {
+        std::cerr << "DEBUG: msgget failed with errno=" << errno
+                  << " (" << strerror(errno) << ")" << std::endl;
+        exit(1);
+    }
+
+    lifeguardMsgId = msgget(LIFEGUARD_MSG_KEY, IPC_CREAT | 0666);
+    if (lifeguardMsgId < 0) {
         std::cerr << "DEBUG: msgget failed with errno=" << errno
                   << " (" << strerror(errno) << ")" << std::endl;
         exit(1);
@@ -112,7 +120,7 @@ pid_t createClientWithPossibleDependent(int &clientId) {
                 age = 10 + (rand() % 60);
             }
 
-            bool isVip = (rand() % 100 < 10);
+            bool isVip = (rand() % 100 < 5);
 
             Client *client = new Client(guardianId, age, isVip);
             client->setAsGuardian(isGuardian);

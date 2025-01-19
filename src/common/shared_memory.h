@@ -6,6 +6,7 @@
 #include <sys/shm.h>
 #include <sys/sem.h>
 #include <sys/msg.h>
+#include <climits>
 
 class Client;
 
@@ -48,23 +49,39 @@ struct SharedMemory {
     int workingHours[2];  // Tp, Tk
 };
 
-struct Message {
+struct TicketMessage {
     long mtype;
-    int signal;  // 1: evacuate, 2: return, 3: ticket
+    int clientId;
+    int ticketId;
+    int validityTime;
+    time_t issueTime;
+    bool isVip;
+    bool isChild;
+};
+
+struct LifeguardMessage {
+    long mtype;
     int poolId;
-    struct {
-        int id;
-        int clientId;
-        int validityTime;
-        time_t issueTime;
-        int isVip;
-        int isChild;
-    } ticketData;
+    int action;  // 1: evacuate, 2: return
+};
+
+const long CLIENT_REQUEST_VIP_M_TYPE = 31080;
+const long CLIENT_REQUEST_REGULAR_M_TYPE = 31081;
+
+struct ClientRequest {
+    long mtype;     // 1 - regular, 2 - VIP
+    int clientId;
+    int age;
+    bool hasGuardian;
+    bool hasSwimDiaper;
+    bool isVip;
 };
 
 const key_t SHM_KEY = 6969;
 const key_t SEM_KEY = 7000;
-const key_t MSG_KEY = 7001;
+const key_t LIFEGUARD_MSG_KEY = ftok("./ipc_key.txt", 'L');
+const key_t CASHIER_MSG_KEY = ftok("./ipc_key.txt", 'C');
+
 
 enum Semaphores {
     SEM_OLYMPIC = 0,

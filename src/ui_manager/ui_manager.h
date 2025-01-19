@@ -31,13 +31,6 @@ private:
 
     UIManager();
 
-    ~UIManager() {
-        shouldRun.store(false);
-        if (displayThread.joinable()) {
-            displayThread.join();
-        }
-    }
-
     static bool tryAttachToSharedMemory();
 
     void clearScreen();
@@ -62,6 +55,13 @@ public:
     UIManager(const UIManager &) = delete;
 
     UIManager &operator=(const UIManager &) = delete;
+
+    ~UIManager() {
+        shouldRun.store(false);
+        if (displayThread.joinable()) {
+            displayThread.join();
+        }
+    }
 };
 
 #endif

@@ -4,39 +4,32 @@
 #include "shared_memory.h"
 #include "ticket.h"
 #include <vector>
-
-struct ClientRequest {
-    long mtype; // 1 - regular, 2 - VIP
-    struct {
-        int clientId;
-        int age;
-        int hasGuardian;
-        int hasSwimDiaper;
-        int isVip;
-    } data;
-};
+#include <thread>
 
 class Cashier {
 private:
     int msgId;
     int semId;
+    int shmId;
     int currentTicketNumber;
     std::vector<Ticket> activeTickets;
-    EntranceQueue *queue;
+    std::atomic<bool> shouldRun;
+    std::thread queueProcessingThread;
 
-    bool isTicketValid(const Ticket &ticket) const;
 
-    void removeExpiredTickets();
+    void processClient();
+    void processQueueLoop();
 
     void addToQueue(const ClientRequest &request);
 
-    ClientRequest getNextClient();
-
 public:
     Cashier();
-
-    ~Cashier() = default;
-
+    ~Cashier() {
+        shouldRun.store(false);
+        if (queueProcessingThread.joinable()) {
+            queueProcessingThread.join();
+        }
+    }
     void run();
 };
 

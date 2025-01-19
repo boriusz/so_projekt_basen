@@ -15,7 +15,8 @@ private:
     int guardianId;
     Pool *currentPool;
     std::vector<Client *> dependents;
-    int msgId;
+    int cashierMsgId;
+    int lifeguardMsgId;
     std::unique_ptr<Ticket> ticket;
     bool hasEvacuated;
 

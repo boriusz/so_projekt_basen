@@ -26,8 +26,11 @@ void SignalHandler::setChildCleanupHandler(std::function<void()> handler) {
 }
 
 void SignalHandler::cleanupIPC() {
-    int msgId = msgget(MSG_KEY, 0666);
-    if (msgId >= 0) msgctl(msgId, IPC_RMID, nullptr);
+    int cashierMsgId = msgget(CASHIER_MSG_KEY, 0666);
+    if (cashierMsgId >= 0) msgctl(cashierMsgId, IPC_RMID, nullptr);
+
+    int lifeguardMsgId = msgget(LIFEGUARD_MSG_KEY, 0666);
+    if (lifeguardMsgId >= 0) msgctl(lifeguardMsgId, IPC_RMID, nullptr);
 
     int semId = semget(SEM_KEY, SEM_COUNT, 0666);
     if (semId >= 0) semctl(semId, 0, IPC_RMID);

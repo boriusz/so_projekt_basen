@@ -31,8 +31,11 @@ Client::Client(int id, int age, bool isVip, bool hasSwimDiaper, bool hasGuardian
             throw PoolError("Child under 3 needs swim diapers");
         }
 
-        msgId = msgget(MSG_KEY, 0666);
-        checkSystemCall(msgId, "msgget failed in Client");
+        cashierMsgId = msgget(CASHIER_MSG_KEY, 0666);
+        checkSystemCall(cashierMsgId, "msgget failed in Client");
+
+        lifeguardMsgId = msgget(LIFEGUARD_MSG_KEY, 0666);
+        checkSystemCall(lifeguardMsgId, "msgget failed in Client");
 
         semId = semget(SEM_KEY, SEM_COUNT, 0666);
         checkSystemCall(semId, "semget failed in Client");
@@ -51,52 +54,51 @@ void Client::addDependent(Client *dependent) {
 
 void Client::waitForTicket() {
     ClientRequest request = {};
-    request.mtype = isVip ? 2 : 1;
-    request.data = {
-            .clientId = id,
-            .age = age,
-            .hasGuardian = hasGuardian ? 1 : 0,
-            .hasSwimDiaper = hasSwimDiaper ? 1 : 0,
-            .isVip = isVip ? 1 : 0
-    };
-
+    request.mtype = isVip ? CLIENT_REQUEST_VIP_M_TYPE : CLIENT_REQUEST_REGULAR_M_TYPE;
+    request.clientId = id;
+    request.age = age;
+    request.hasGuardian = hasGuardian;
+    request.hasSwimDiaper = hasSwimDiaper;
+    request.isVip = isVip;
 
     try {
-        checkSystemCall(msgsnd(msgId, &request, sizeof(request.data), 0),
+        checkSystemCall(msgsnd(cashierMsgId, &request, sizeof(ClientRequest) - sizeof(long), 0),
                         "Failed to send ticket request");
-    } catch (const std::exception& e) {
-        std::cerr << e.what() << std::endl;
+
+        TicketMessage ticketMsg = {};
+        ssize_t received = msgrcv(cashierMsgId, &ticketMsg, sizeof(TicketMessage) - sizeof(long),
+                                  id, 0);
+
+        if (received == -1) {
+            throw PoolSystemError("Failed to receive ticket");
+        }
+
+        if (ticketMsg.clientId != id || ticketMsg.validityTime <= 0) {
+            throw PoolError("Received invalid ticket data");
+        }
+
+        std::cout << "Client #" << id << " received ticket #" << ticketMsg.ticketId
+                  << " valid for " << ticketMsg.validityTime << " minutes" << std::endl;
+
+        ticket = std::make_unique<Ticket>(
+                ticketMsg.ticketId,
+                ticketMsg.clientId,
+                ticketMsg.validityTime,
+                ticketMsg.issueTime,
+                ticketMsg.isVip,
+                ticketMsg.isChild
+        );
+
+    } catch (const std::exception &e) {
+        std::cerr << "Error in waitForTicket: " << e.what() << std::endl;
         throw;
-    }
-
-    Message response = {};
-    while (true) {
-        std::cout << "Client #" << id << " waiting for message id #" << id << std::endl;
-        if (msgrcv(msgId, &response, sizeof(Message) - sizeof(long), id, 0) == -1) {
-            perror("Failed to receive ticket");
-            exit(1);
-        }
-
-        std::cout << "Client #" << id << " received a message with id" << response.mtype << " containing ticket #"
-                  << response.ticketData.id << std::endl;
-
-        if (response.signal == 3 && response.mtype == id) {
-            ticket = std::make_unique<Ticket>(
-                    response.ticketData.id,
-                    response.ticketData.clientId,
-                    response.ticketData.validityTime,
-                    response.ticketData.issueTime,
-                    response.ticketData.isVip == 1,
-                    response.ticketData.isChild == 1
-            );
-            break;
-        }
     }
 }
 
 void Client::handleEvacuationSignals() {
-    Message msg{};
-    ssize_t received = msgrcv(msgId, &msg, sizeof(Message) - sizeof(long), id, IPC_NOWAIT);
+    LifeguardMessage msg{};
+    ssize_t received = msgrcv(lifeguardMsgId, &msg, sizeof(LifeguardMessage) - sizeof(long),
+                              id, IPC_NOWAIT);
 
     if (received < 0) {
         if (errno != ENOMSG) {
@@ -105,24 +107,39 @@ void Client::handleEvacuationSignals() {
         return;
     }
 
-    if (msg.signal == 1) {
-        std::cout << "Client " << id << " received evacuation signal" << std::endl;
+    if (msg.action == 1) {
+        std::cout << "Client " << id << " received evacuation signal from pool "
+                  << msg.poolId << std::endl;
+
         if (currentPool) {
             for (auto dependent: dependents) {
                 currentPool->leave(dependent->id);
-                dependent->hasEvacuated = true;
-                std::cout << "Dependent " << dependent->id << " evacuated" << std::endl;
             }
             currentPool->leave(id);
-            hasEvacuated = true;
             currentPool = nullptr;
-            std::cout << "Client " << id << " evacuated" << std::endl;
+
+            if (rand() % 100 < 30) {
+                std::cout << "Client " << id << " decides to wait for the pool to reopen" << std::endl;
+                hasEvacuated = true;
+                for (auto dependent: dependents) {
+                    dependent->hasEvacuated = true;
+                }
+            } else {
+                std::cout << "Client " << id << " looking for another pool" << std::endl;
+                moveToAnotherPool();
+            }
         }
-    } else if (msg.signal == 2) {
-        std::cout << "Client " << id << " received return signal" << std::endl;
+    } else if (msg.action == 2) {
+        std::cout << "Client " << id << " received return signal for pool "
+                  << msg.poolId << std::endl;
+
         hasEvacuated = false;
         for (auto dependent: dependents) {
             dependent->hasEvacuated = false;
+        }
+
+        if (!currentPool) {
+            moveToAnotherPool();
         }
     }
 }
@@ -262,32 +279,37 @@ void Client::moveToAnotherPool() {
 void Client::run() {
     signal(SIGTERM, [](int) { exit(0); });
 
-    waitForTicket();
+    try {
+        waitForTicket();
 
-    while (true) {
-        handleEvacuationSignals();
+        while (true) {
+            if (!ticket || !ticket->isValid()) {
+                std::cout << "Client " << id << "'s ticket has expired "
+                          << "(was valid for " << ticket->getValidityTime()
+                          << " minutes)" << std::endl;
 
-        if (ticket && !ticket->isValid()) {
-            std::cout << "Client " << id << " must leave the pool - ticket expired "
-                      << "(was valid for " << ticket->getValidityTime()
-                      << " minutes)" << std::endl;
+                if (currentPool) {
+                    currentPool->leave(id);
+                    currentPool = nullptr;
 
-            if (currentPool) {
-                currentPool->leave(id);
-                currentPool = nullptr;
-
-                for (auto dependent: dependents) {
-                    dependent->currentPool->leave(dependent->id);
-                    dependent->currentPool = nullptr;
+                    for (auto dependent: dependents) {
+                        dependent->currentPool->leave(dependent->id);
+                        dependent->currentPool = nullptr;
+                    }
                 }
+                exit(0);
             }
-            exit(0);
-        }
 
-        if (!currentPool && !hasEvacuated) {
-            moveToAnotherPool();
-        }
+            handleEvacuationSignals();
 
-        sleep(1);
+            if (!currentPool && !hasEvacuated) {
+                moveToAnotherPool();
+            }
+
+            sleep(1);
+        }
+    } catch (const std::exception &e) {
+        std::cerr << "Error in client " << id << ": " << e.what() << std::endl;
+        exit(1);
     }
 }
