@@ -31,6 +31,13 @@ private:
 
     UIManager();
 
+    ~UIManager() {
+        shouldRun.store(false);
+        if (displayThread.joinable()) {
+            displayThread.join();
+        }
+    }
+
     static bool tryAttachToSharedMemory();
 
     void clearScreen();

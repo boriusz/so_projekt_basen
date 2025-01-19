@@ -10,7 +10,7 @@ public:
     static bool isOpen() {
         time_t now;
         time(&now);
-        struct tm* timeinfo = localtime(&now);
+        struct tm *timeinfo = localtime(&now);
         int currentHour = timeinfo->tm_hour;
 
         int shmId = shmget(SHM_KEY, sizeof(SharedMemory), 0666);
@@ -19,8 +19,8 @@ public:
             return false;
         }
 
-        SharedMemory* shm = (SharedMemory*)shmat(shmId, nullptr, 0);
-        if (shm == (void*)-1) {
+        SharedMemory *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
+        if (shm == (void *) -1) {
             perror("shmat failed in WorkingHoursManager");
             return false;
         }
@@ -31,8 +31,13 @@ public:
                       !shm->recreational.isUnderMaintenance &&
                       !shm->kids.isUnderMaintenance;
 
-        shmdt(shm);
+        if (shmdt(shm) == -1) {
+            perror("shmdt failed");
+            return false;
+        }
+
         return isOpen;
     }
 };
+
 #endif

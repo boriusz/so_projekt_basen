@@ -15,8 +15,13 @@ private:
 
 public:
     static PoolManager* getInstance();
-    ~PoolManager() = default;
 
+    ~PoolManager() {
+        if (instance) {
+            delete instance;
+            instance = nullptr;
+        }
+    }
     Pool* getPool(Pool::PoolType type);
 
     PoolManager(const PoolManager&) = delete;

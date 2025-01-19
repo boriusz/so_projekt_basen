@@ -62,10 +62,9 @@ Pool::Pool(Pool::PoolType poolType, int capacity, int minAge, int maxAge,
 }
 
 bool Pool::enter(Client &client) {
-    if (state->isClosed) {
-        std::cout << "Pool is closed, client " << client.getId() << " cannot enter" << std::endl;
-        return false;
-    }
+    ScopedLock stateLock(stateMutex);
+    if (state->isClosed) return false;
+    if (state->currentCount >= capacity) return false;
 
     if (state->currentCount >= capacity) {
         std::cout << "Pool is at capacity, client " << client.getId() << " cannot enter" << std::endl;
@@ -125,21 +124,30 @@ bool Pool::enter(Client &client) {
 void Pool::leave(int clientId) {
     ScopedLock stateLock(stateMutex);
 
+    std::vector<int> clientsToRemove;
+
     for (int i = 0; i < state->currentCount; i++) {
         if (state->clients[i].id == clientId) {
+            clientsToRemove.push_back(i);
             if (state->clients[i].guardianId == -1) {
                 for (int j = 0; j < state->currentCount; j++) {
                     if (state->clients[j].guardianId == clientId) {
+                        clientsToRemove.push_back(j);
                         std::cout << "Dependent " << state->clients[j].id
                                   << " leaving with guardian " << clientId << std::endl;
-                        state->clients[j] = state->clients[--state->currentCount];
-                        j--;
                     }
                 }
             }
-            std::cout << "Client " << clientId << " left the pool" << std::endl;
-            state->clients[i] = state->clients[--state->currentCount];
             break;
+        }
+    }
+
+    std::sort(clientsToRemove.begin(), clientsToRemove.end(), std::greater<>());
+    for (int index : clientsToRemove) {
+        state->clients[index] = state->clients[state->currentCount - 1];
+        state->currentCount--;
+        if (index == clientsToRemove.back()) {
+            std::cout << "Client " << clientId << " left the pool" << std::endl;
         }
     }
 }

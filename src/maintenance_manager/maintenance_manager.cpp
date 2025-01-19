@@ -12,17 +12,18 @@ MaintenanceManager *MaintenanceManager::getInstance() {
 }
 
 void MaintenanceManager::startMaintenance() {
-    try {
-        if (maintenanceInProgress.load()) {
-            throw PoolError("Maintenance already in progress");
-        }
+    std::lock_guard<std::mutex> lock(maintenanceMutex);
+    if (maintenanceInProgress.load()) {
+        throw PoolError("Maintenance already in progress");
+    }
+    maintenanceInProgress.store(true);
 
+    try {
         if (WorkingHoursManager::isOpen()) {
             throw PoolError("Cannot start maintenance during working hours");
         }
 
         std::cout << "Starting facility-wide maintenance" << std::endl;
-        maintenanceInProgress.store(true);
 
         auto poolManager = PoolManager::getInstance();
         if (!poolManager) {

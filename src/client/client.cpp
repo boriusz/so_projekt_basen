@@ -61,9 +61,12 @@ void Client::waitForTicket() {
     };
 
 
-    if (msgsnd(msgId, &request, sizeof(request.data), 0) == -1) {
-        perror("Failed to send ticket request");
-        exit(1);
+    try {
+        checkSystemCall(msgsnd(msgId, &request, sizeof(request.data), 0),
+                        "Failed to send ticket request");
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        throw;
     }
 
     Message response = {};
