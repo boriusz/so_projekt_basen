@@ -15,8 +15,7 @@ private:
     int semId;
     pthread_mutex_t stateMutex;
 
-    void notifyClients(int signal);
-    void waitForEmptyPool();
+    void notifyClients(long signal);
     void handleEmergency();
     int getPoolSemaphore() const {
         switch (pool->getType()) {
@@ -36,8 +35,8 @@ public:
     explicit Lifeguard(Pool* pool);
 
     void run();
-    void closePool();   // signal1
-    void openPool();    // signal2
+    void closePool();
+    void openPool();
 
     Lifeguard(const Lifeguard&) = delete;
     Lifeguard& operator=(const Lifeguard&) = delete;

@@ -29,7 +29,7 @@ Pool::Pool(Pool::PoolType poolType, int capacity, int minAge, int maxAge,
         shmId = shmget(SHM_KEY, sizeof(SharedMemory), 0666);
         checkSystemCall(shmId, "shmget failed in Pool");
 
-        SharedMemory *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
+        auto *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
         if (shm == (void *) -1) {
             throw PoolSystemError("shmat failed in Pool");
         }
@@ -150,16 +150,6 @@ void Pool::leave(int clientId) {
             std::cout << "Client " << clientId << " left the pool" << std::endl;
         }
     }
-}
-
-double Pool::getCurrentAverageAge() const {
-    if (state->currentCount == 0) return 0;
-
-    int sum = 0;
-    for (int i = 0; i < state->currentCount; i++) {
-        sum += state->clients[i].age;
-    }
-    return static_cast<double>(sum) / state->currentCount;
 }
 
 bool Pool::isEmpty() const {

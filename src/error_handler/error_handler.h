@@ -3,7 +3,7 @@
 
 #include <string>
 #include <stdexcept>
-#include <errno.h>
+#include <cerrno>
 
 class PoolError : public std::runtime_error {
 public:

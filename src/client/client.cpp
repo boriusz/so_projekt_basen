@@ -77,9 +77,6 @@ void Client::waitForTicket() {
             throw PoolError("Received invalid ticket data");
         }
 
-        std::cout << "Client #" << id << " received ticket #" << ticketMsg.ticketId
-                  << " valid for " << ticketMsg.validityTime << " minutes" << std::endl;
-
         ticket = std::make_unique<Ticket>(
                 ticketMsg.ticketId,
                 ticketMsg.clientId,
@@ -251,7 +248,7 @@ void Client::moveToAnotherPool() {
             }
 
             retries++;
-            if (!success && retries < 3) {
+            if (retries < 3) {
                 std::cout << "Client " << id << " failed to enter pool, retrying... ("
                           << retries << "/3)" << std::endl;
                 sleep(2);

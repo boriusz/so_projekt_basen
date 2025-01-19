@@ -20,7 +20,7 @@ private:
     void processClient();
     void processQueueLoop();
 
-    void addToQueue(const ClientRequest &request);
+    void addToQueue(const ClientRequest &request) const;
 
 public:
     Cashier();

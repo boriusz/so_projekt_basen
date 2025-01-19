@@ -28,8 +28,6 @@ public:
 
     void leave(int clientId);
 
-    double getCurrentAverageAge() const;
-
     bool isEmpty() const;
 
     PoolType getType();

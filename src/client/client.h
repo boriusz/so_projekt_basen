@@ -39,9 +39,9 @@ public:
 
     void setAsGuardian(bool value) { isGuardian = value; }
 
-    bool getIsGuardian() const { return isGuardian; }
+    [[nodiscard]] bool getIsGuardian() const { return isGuardian; }
 
-    const std::vector<Client *> &getDependents() const { return dependents; };
+    [[nodiscard]] const std::vector<Client *> &getDependents() const { return dependents; };
 
     void run();
 

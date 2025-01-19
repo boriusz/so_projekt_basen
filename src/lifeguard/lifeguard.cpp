@@ -5,7 +5,6 @@
 #include <thread>
 #include <chrono>
 #include <sys/msg.h>
-#include <ctime>
 #include <unistd.h>
 
 Lifeguard::Lifeguard(Pool *pool) : pool(pool), poolClosed(false), isEmergency(false) {
@@ -25,14 +24,8 @@ Lifeguard::Lifeguard(Pool *pool) : pool(pool), poolClosed(false), isEmergency(fa
     }
 }
 
-void Lifeguard::notifyClients(int signal) {
-    struct ClientToNotify {
-        int id;
-        int notificationAttempts;
-        bool notified;
-    };
-    std::vector<ClientToNotify> clientsToNotify;
-
+void Lifeguard::notifyClients(long signal) {
+    std::cout << "notifyclients" << std::endl;
     try {
         PoolState *state = pool->getState();
         if (!state) {
@@ -44,17 +37,8 @@ void Lifeguard::notifyClients(int signal) {
         operations[0].sem_op = -1;
         operations[0].sem_flg = SEM_UNDO;
 
-        // Blokujemy dostęp do stanu basenu
         checkSystemCall(semop(semId, operations, 1), "Failed to lock pool state");
 
-        // Zbieramy listę klientów do powiadomienia
-        for (int i = 0; i < state->currentCount; i++) {
-            clientsToNotify.push_back({
-                                              state->clients[i].id,
-                                              0,
-                                              false
-                                      });
-        }
 
         std::cout << "Notifying " << state->currentCount << " clients in "
                   << pool->getName() << " pool" << std::endl;
@@ -62,55 +46,24 @@ void Lifeguard::notifyClients(int signal) {
         operations[0].sem_op = 1;
         checkSystemCall(semop(semId, operations, 1), "Failed to unlock pool state");
 
-        const int MAX_NOTIFICATION_ATTEMPTS = 5;
-        bool allNotified = false;
-        int attemptCount = 0;
 
-        // Próbujemy powiadomić wszystkich klientów
-        while (!allNotified && attemptCount < MAX_NOTIFICATION_ATTEMPTS) {
-            allNotified = true;
+        for (int i = 0; i < state->currentCount; i++) {
+            auto client = state->clients[i];
 
-            for (auto &client: clientsToNotify) {
-                if (client.notified) continue;
+            LifeguardMessage msg = {};
+            msg.mtype = client.id;
+            msg.poolId = static_cast<int>(pool->getType());
+            msg.action = static_cast<int>(signal);
 
-                LifeguardMessage msg = {};
-                msg.mtype = client.id;
-                msg.poolId = static_cast<int>(pool->getType());
-                msg.action = (signal == 101) ? 1 : 2;  // 1 = evacuate, 2 = return
-
-                if (msgsnd(msgId, &msg, sizeof(LifeguardMessage) - sizeof(long), IPC_NOWAIT) != -1) {
-                    std::cout << "Sent " << (msg.action == 1 ? "evacuation" : "return")
-                              << " signal to client " << client.id << std::endl;
-                    client.notified = true;
-                } else {
-                    allNotified = false;
-                    client.notificationAttempts++;
-
-                    if (client.notificationAttempts >= MAX_NOTIFICATION_ATTEMPTS) {
-                        std::cerr << "Failed to notify client " << client.id
-                                  << " after " << MAX_NOTIFICATION_ATTEMPTS
-                                  << " attempts" << std::endl;
-
-                        // Wymuszamy usunięcie klienta z basenu
-                        operations[0].sem_op = -1;
-                        checkSystemCall(semop(semId, operations, 1), "Failed to lock pool state");
-                        pool->leave(client.id);
-                        operations[0].sem_op = 1;
-                        checkSystemCall(semop(semId, operations, 1), "Failed to unlock pool state");
-                    }
-                }
-            }
-
-            if (!allNotified) {
-                usleep(100000);  // 100ms przerwy między próbami
-                attemptCount++;
+            if (msgsnd(msgId, &msg, sizeof(LifeguardMessage) - sizeof(long), IPC_NOWAIT) != -1) {
+                std::cout << "Sent " << (msg.action == 1 ? "evacuation" : "return")
+                          << " signal to client " << client.id << std::endl;
             }
         }
 
-        // Czekamy na opuszczenie basenu tylko przy ewakuacji
-        if (signal == 101) {
+        if (signal == LIFEGUARD_ACTION_EVAC) {
             std::cout << "Waiting for clients to leave the pool..." << std::endl;
-            const int MAX_WAIT_TIME = 10;
+            const int MAX_WAIT_TIME = 5;
             int waitTime = 0;
 
             while (!pool->isEmpty() && waitTime < MAX_WAIT_TIME) {
@@ -133,20 +86,6 @@ void Lifeguard::notifyClients(int signal) {
         struct sembuf op = {static_cast<unsigned short>(getPoolSemaphore()), 1, 0};
         semop(semId, &op, 1);
         throw;
-    }
-}
-
-void Lifeguard::waitForEmptyPool() {
-    const int MAX_WAIT_TIME = 30;
-    int waitTime = 0;
-
-    while (!pool->isEmpty() && waitTime < MAX_WAIT_TIME) {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        waitTime++;
-    }
-
-    if (!pool->isEmpty()) {
-        std::cerr << "Warning: Pool not empty after maximum wait time!" << std::endl;
     }
 }
 
@@ -176,8 +115,7 @@ void Lifeguard::closePool() {
     pool->getState()->isClosed = true;
     pthread_mutex_unlock(&stateMutex);
 
-    notifyClients(101);
-    waitForEmptyPool();
+    notifyClients(LIFEGUARD_ACTION_EVAC);
 }
 
 void Lifeguard::openPool() {
@@ -198,7 +136,7 @@ void Lifeguard::openPool() {
     pool->getState()->isClosed = false;
     pthread_mutex_unlock(&stateMutex);
 
-    notifyClients(102);
+    notifyClients(LIFEGUARD_ACTION_RETURN);
 }
 
 void Lifeguard::run() {
@@ -206,6 +144,8 @@ void Lifeguard::run() {
 
     try {
         while (true) {
+            std::cout << "lifeguard running" << std::endl;
+//            TODO fix, lifeguard freezes here
             if (!WorkingHoursManager::isOpen()) {
                 if (!poolClosed.load()) {
                     std::cout << "Closing pool - outside working hours" << std::endl;
@@ -216,9 +156,9 @@ void Lifeguard::run() {
             }
 
             if (!isEmergency.load()) {
-                // Normalne sprawdzanie basenu
                 std::this_thread::sleep_for(std::chrono::seconds(rand() % 30 + 30));
 
+                std::cout << "pool closed: " << poolClosed.load() << std::endl;
                 if (!poolClosed.load()) {
                     closePool();
                     std::this_thread::sleep_for(std::chrono::seconds(5));
@@ -226,8 +166,7 @@ void Lifeguard::run() {
                 }
             }
 
-            // Symulacja sytuacji awaryjnej
-            if (rand() % 100 < 5) {
+            if (rand() % 100 < 30) {
                 handleEmergency();
             }
 

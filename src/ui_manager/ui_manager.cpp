@@ -45,7 +45,7 @@ void UIManager::clearScreen() {
 void UIManager::displayQueueState() {
     std::lock_guard<std::mutex> displayLock(displayMutex);
 
-    SharedMemory *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
+    auto *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
     if (shm == (void *) -1) return;
 
     pthread_mutex_lock(&shm->mutex);
@@ -64,72 +64,10 @@ void UIManager::displayQueueState() {
     shmdt(shm);
 }
 
-void UIManager::start() {
-    std::cout << "Starting UI Manager..." << std::endl;
-    if (isRunning.load()) {
-        std::cout << "UI Manager already running" << std::endl;
-        return;
-    }
-
-    shouldRun.store(true);
-    isRunning.store(true);
-
-    displayThread = std::thread([this]() {
-        std::cout << "Display thread started" << std::endl;
-
-        while (shouldRun.load()) {
-            try {
-                clearScreen();
-
-                auto poolManager = PoolManager::getInstance();
-                if (!poolManager) {
-                    std::cerr << "Failed to get pool manager" << std::endl;
-                    continue;
-                }
-
-                time_t now;
-                time(&now);
-                struct tm *timeinfo = localtime(&now);
-
-                std::cout << Color::MAGENTA << "Swimming Pool Simulation - "
-                          << std::put_time(timeinfo, "%H:%M:%S") << Color::RESET << "\n\n";
-
-                std::cout << "Status: " << (WorkingHoursManager::isOpen() ?
-                                            Color::GREEN + "OPEN" : Color::RED + "CLOSED") << Color::RESET << "\n\n";
-
-                // Wyświetl stan każdego basenu
-                auto pools = {
-                        poolManager->getPool(Pool::PoolType::Olympic),
-                        poolManager->getPool(Pool::PoolType::Recreational),
-                        poolManager->getPool(Pool::PoolType::Children)
-                };
-
-                for (auto pool: pools) {
-                    if (pool) {
-                        displayPoolState(pool);
-                        std::cout << std::string(50, '-') << "\n";
-                    }
-                }
-
-                displayQueueState();
-                std::cout << "\nControls:\nCtrl+C - Exit\nM - Force maintenance\n";
-
-                std::cout.flush();  // Wymuszamy flush bufora
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
-
-            } catch (const std::exception &e) {
-                std::cerr << "Error in display thread: " << e.what() << std::endl;
-            }
-        }
-        std::cout << "Display thread stopping" << std::endl;
-        isRunning.store(false);
-    });
-}
-
-void UIManager::displayPoolState(Pool *pool) {
+void UIManager::displayPoolState(Pool *pool) const {
     if (!pool) return;
 
-    SharedMemory *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
+    auto *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
     if (shm == (void *) -1) {
         perror("shmat failed in displayPoolState");
         return;

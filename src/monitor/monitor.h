@@ -10,7 +10,7 @@ private:
     std::atomic<bool> shouldRun;
     UIManager* uiManager;
 
-    void setupSignalHandling();
+    static void setupSignalHandling();
 
 public:
     Monitor();

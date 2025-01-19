@@ -82,7 +82,7 @@ pid_t createCashier() {
             SignalHandler::setChildCleanupHandler([]() {});
             cashier.run();
             exit(0);
-        } catch (const std::exception& e) {
+        } catch (const std::exception &e) {
             std::cerr << "Error in cashier process: " << e.what() << std::endl;
             exit(1);
         }
@@ -98,7 +98,7 @@ pid_t createClientWithPossibleDependent(int &clientId) {
     int guardianId = clientId++;
 
     std::vector<int> childrenIds;
-    bool isGuardian = (rand() % 100 < 30);
+    bool isGuardian = (rand() % 100 < 20);
     if (isGuardian) {
         int numChildren = rand() % 3 + 1;
         for (int i = 0; i < numChildren; i++) {
@@ -120,7 +120,7 @@ pid_t createClientWithPossibleDependent(int &clientId) {
                 age = 10 + (rand() % 60);
             }
 
-            bool isVip = (rand() % 100 < 5);
+            bool isVip = (rand() % 100 < 8);
 
             Client *client = new Client(guardianId, age, isVip);
             client->setAsGuardian(isGuardian);
@@ -149,7 +149,7 @@ pid_t createClientWithPossibleDependent(int &clientId) {
     return pid;
 }
 
-void maintenanceThread() {
+void runMaintenanceThread() {
     auto maintenanceManager = MaintenanceManager::getInstance();
 
     while (shouldRun) {
@@ -163,13 +163,7 @@ void maintenanceThread() {
 }
 
 void initializeWorkingHours() {
-    int shmId = shmget(SHM_KEY, sizeof(SharedMemory), 0666);
-    if (shmId < 0) {
-        perror("shmget failed in initializeWorkingHours");
-        exit(1);
-    }
-
-    SharedMemory *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
+    auto *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
     if (shm == (void *) -1) {
         perror("shmat failed in initializeWorkingHours");
         exit(1);
@@ -187,6 +181,9 @@ int main() {
     try {
         initializeIPC();
         initializeWorkingHours();
+
+        auto maintenanceThread = std::thread(&runMaintenanceThread);
+
 
         SignalHandler::initialize(&processes, &shouldRun);
         SignalHandler::setupSignalHandling();

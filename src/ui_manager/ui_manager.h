@@ -33,11 +33,11 @@ private:
 
     static bool tryAttachToSharedMemory();
 
-    void clearScreen();
+    static void clearScreen();
 
     void displayQueueState();
 
-    void displayPoolState(Pool *pool);
+    void displayPoolState(Pool *pool) const;
 
     void initSharedMemory();
 
@@ -49,8 +49,6 @@ public:
     static bool checkIfMainProcessRunning();
 
     static UIManager *getInstance();
-
-    void start();
 
     UIManager(const UIManager &) = delete;
 

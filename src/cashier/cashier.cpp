@@ -27,7 +27,7 @@ Cashier::Cashier() : currentTicketNumber(1), shouldRun(true) {
 }
 
 void Cashier::processClient() {
-    SharedMemory *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
+    auto *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
     if (shm == (void *) -1) {
         throw PoolSystemError("shmat failed in processClient");
     }
@@ -36,7 +36,6 @@ void Cashier::processClient() {
     checkSystemCall(semop(semId, &op, 1), "semop lock failed");
 
     try {
-        // Sprawdzamy czy kolejka nie jest pusta
         if (shm->entranceQueue.queueSize == 0) {
             op.sem_op = 1;
             semop(semId, &op, 1);
@@ -53,7 +52,7 @@ void Cashier::processClient() {
         ticket.mtype = request.clientId;
         ticket.clientId = request.clientId;
         ticket.ticketId = ticketId;
-        ticket.validityTime = 121;
+        ticket.validityTime = 1;
         ticket.issueTime = issueTime;
         ticket.isVip = request.isVip;
         ticket.isChild = request.age < 10;
@@ -79,8 +78,8 @@ void Cashier::processClient() {
     }
 }
 
-void Cashier::addToQueue(const ClientRequest &request) {
-    SharedMemory *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
+void Cashier::addToQueue(const ClientRequest &request) const {
+    auto *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
     if (shm == (void *) -1) {
         throw PoolSystemError("shmat failed in addToQueue");
     }
@@ -119,13 +118,7 @@ void Cashier::addToQueue(const ClientRequest &request) {
         for (int i = shm->entranceQueue.queueSize; i > insertPos; i--) {
             shm->entranceQueue.queue[i] = shm->entranceQueue.queue[i - 1];
         }
-        std::cout << "setting client into queue at pos " << insertPos << std::endl;
-
         shm->entranceQueue.queue[insertPos] = entry;
-
-        std::cout << "Added client " << entry.clientId << " to queue. Queue size: "
-                  << shm->entranceQueue.queueSize << (entry.isVip ? " (VIP)" : "")
-                  << std::endl;
 
         op.sem_op = 1;
         checkSystemCall(semop(semId, &op, 1), "semop unlock failed");
@@ -148,7 +141,7 @@ void Cashier::processQueueLoop() {
         } catch (const std::exception &e) {
             std::cerr << "Error processing client: " << e.what() << std::endl;
         }
-        std::this_thread::sleep_for(std::chrono::seconds(3));
+        std::this_thread::sleep_for(std::chrono::seconds(2));
     }
 }
 

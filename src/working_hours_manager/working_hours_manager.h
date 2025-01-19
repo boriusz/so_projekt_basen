@@ -19,7 +19,8 @@ public:
             return false;
         }
 
-        SharedMemory *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
+        auto *shm = (SharedMemory *) shmat(shmId, nullptr, 0);
+
         if (shm == (void *) -1) {
             perror("shmat failed in WorkingHoursManager");
             return false;

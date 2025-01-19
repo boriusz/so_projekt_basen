@@ -1,6 +1,7 @@
 #include "signal_handler.h"
 #include "shared_memory.h"
 #include <iostream>
+#include <utility>
 #include <sys/msg.h>
 #include <sys/shm.h>
 #include <sys/sem.h>
@@ -22,7 +23,7 @@ void SignalHandler::setChildProcess() {
 }
 
 void SignalHandler::setChildCleanupHandler(std::function<void()> handler) {
-    childCleanupHandler = handler;
+    childCleanupHandler = std::move(handler);
 }
 
 void SignalHandler::cleanupIPC() {
@@ -71,7 +72,7 @@ void SignalHandler::handleSignal(int signal) {
 }
 
 void SignalHandler::setupSignalHandling() {
-    struct sigaction sa;
+    struct sigaction sa{};
     sa.sa_handler = handleSignal;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
