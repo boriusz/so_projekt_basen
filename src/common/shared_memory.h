@@ -63,9 +63,12 @@ const int LIFEGUARD_ACTION_EVAC = 41080;
 const int LIFEGUARD_ACTION_RETURN = 41081;
 
 struct LifeguardMessage {
-    long mtype;
+    enum Action {
+        EVACUATION = 41080,
+        RETURN = 41081
+    } action;
     int poolId;
-    int action;
+    int clientId;
 };
 
 const long CLIENT_REQUEST_VIP_M_TYPE = 31080;

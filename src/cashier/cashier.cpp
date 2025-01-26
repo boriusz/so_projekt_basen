@@ -142,7 +142,7 @@ void Cashier::processQueueLoop() {
         } catch (const std::exception &e) {
             std::cerr << "Error processing client: " << e.what() << std::endl;
         }
-        std::this_thread::sleep_for(std::chrono::seconds(2));
+        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 }
 

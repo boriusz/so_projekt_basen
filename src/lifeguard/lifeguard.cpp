@@ -9,16 +9,16 @@
 #include <csignal>
 #include <cstdlib>
 
-Lifeguard::Lifeguard(Pool *pool) : pool(pool), poolClosed(false), isEmergency(false) {
+Lifeguard::Lifeguard(Pool *pool) : pool(pool), poolClosed(false), isEmergency(false), shouldRun(true) {
     try {
         checkSystemCall(pthread_mutex_init(&stateMutex, nullptr),
                         "Failed to initialize state mutex");
 
-        msgId = msgget(LIFEGUARD_MSG_KEY, 0666);
-        checkSystemCall(msgId, "msgget failed in Lifeguard");
-
         semId = semget(SEM_KEY, SEM_COUNT, 0666);
         checkSystemCall(semId, "semget failed in Lifeguard");
+
+        setupSocketServer();
+        acceptThread = std::thread(&Lifeguard::acceptClientLoop, this);
 
     } catch (const std::exception &e) {
         std::cerr << "Error initializing Lifeguard: " << e.what() << std::endl;
@@ -26,72 +26,121 @@ Lifeguard::Lifeguard(Pool *pool) : pool(pool), poolClosed(false), isEmergency(fa
     }
 }
 
+Lifeguard::~Lifeguard() {
+    shouldRun.store(false);
+    if (acceptThread.joinable()) {
+        acceptThread.join();
+    }
+
+    for (int socket: clientSockets) {
+        close(socket);
+    }
+    close(serverSocket);
+    std::filesystem::remove(socketPath);
+}
+
+std::string Lifeguard::generateSocketPath() {
+    return "/tmp/pool_" + std::to_string(static_cast<int>(pool->getType())) + ".sock";
+}
+
+void Lifeguard::setupSocketServer() {
+    socketPath = generateSocketPath();
+    std::filesystem::remove(socketPath);
+
+    serverSocket = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (serverSocket == -1) {
+        throw PoolError("Nie można utworzyć socketa");
+    }
+
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, socketPath.c_str(), sizeof(addr.sun_path) - 1);
+
+    if (bind(serverSocket, (struct sockaddr *) &addr, sizeof(addr)) == -1) {
+        close(serverSocket);
+        throw PoolError("Nie można dowiązać socketa");
+    }
+
+    if (listen(serverSocket, 10) == -1) {
+        close(serverSocket);
+        throw PoolError("Nie można rozpocząć nasłuchiwania");
+    }
+}
+
 void Lifeguard::notifyClients(int action) {
+    std::lock_guard<std::mutex> lock(clientSocketsMutex);
+    std::vector<int> socketsToRemove;
+
     try {
         PoolState *state = pool->getState();
-        if (!state) {
-            throw PoolError("Invalid pool state");
+
+        if (action == LIFEGUARD_ACTION_RETURN) {
+            for (size_t j = 0; j < clientSockets.size(); j++) {
+                LifeguardMessage msg{
+                        static_cast<LifeguardMessage::Action>(action),
+                        static_cast<int>(pool->getType()),
+                        -1
+                };
+
+                int result = send(clientSockets[j], &msg, sizeof(msg), MSG_NOSIGNAL);
+                if (result == -1) {
+                    if (errno == EPIPE || errno == ECONNRESET) {
+                        socketsToRemove.push_back(clientSockets[j]);
+                    }
+                }
+            }
         }
+        else if (action == LIFEGUARD_ACTION_EVAC) {
+            for (int i = 0; i < state->currentCount; i++) {
+                LifeguardMessage msg{
+                        static_cast<LifeguardMessage::Action>(action),
+                        static_cast<int>(pool->getType()),
+                        state->clients[i].id
+                };
 
-        struct sembuf operations[1];
-        operations[0].sem_num = getPoolSemaphore();
-        operations[0].sem_op = -1;
-        operations[0].sem_flg = SEM_UNDO;
-
-        checkSystemCall(semop(semId, operations, 1), "Failed to lock pool state");
-
-        int clientCount = state->currentCount;
-        std::vector<ClientData> clientsToNotify;
-
-        clientsToNotify.reserve(clientCount);
-        for (int i = 0; i < clientCount; i++) {
-            clientsToNotify.push_back(state->clients[i]);
-        }
-
-        for (const auto &client: clientsToNotify) {
-            LifeguardMessage msg = {};
-            msg.mtype = client.id;
-            msg.poolId = static_cast<int>(pool->getType());
-            msg.action = action;
-
-            std::cout << "poolId: " << msg.poolId << std::endl;
-
-            if (msgsnd(msgId, &msg, sizeof(LifeguardMessage) - sizeof(long), 0) != -1) {
-                std::cout << "Sent " << (msg.action == LIFEGUARD_ACTION_EVAC ? "evacuation" : "return")
-                          << " signal to client #" << client.id << std::endl;
+                for (size_t j = 0; j < clientSockets.size(); j++) {
+                    int result = send(clientSockets[j], &msg, sizeof(msg), MSG_NOSIGNAL);
+                    if (result == -1) {
+                        if (errno == EPIPE || errno == ECONNRESET) {
+                            socketsToRemove.push_back(clientSockets[j]);
+                        }
+                    }
+                }
             }
         }
 
-        if (action == LIFEGUARD_ACTION_EVAC) {
-            std::cout << "Waiting for clients to leave the pool..." << std::endl;
-            const int MAX_WAIT_TIME = 10;
-            int waitTime = 0;
-
-            while (!pool->isEmpty() && waitTime < MAX_WAIT_TIME) {
-                operations[0].sem_op = 1;
-                checkSystemCall(semop(semId, operations, 1), "Failed to unlock pool state");
-
-                sleep(1);
-                waitTime++;
-
-                operations[0].sem_op = -1;
-                checkSystemCall(semop(semId, operations, 1), "Failed to lock pool state");
-            }
-
-            if (!pool->isEmpty()) {
-                std::cerr << "WARNING: Force removing remaining clients from pool" << std::endl;
-                state->currentCount = 0;
+        for (int socketToRemove: socketsToRemove) {
+            auto it = std::find(clientSockets.begin(), clientSockets.end(), socketToRemove);
+            if (it != clientSockets.end()) {
+                close(socketToRemove);
+                clientSockets.erase(it);
+                std::cout << "Removed disconnected client socket from pool "
+                          << pool->getName() << ". Remaining clients: "
+                          << clientSockets.size() << std::endl;
             }
         }
+    } catch (...) {}
+}
 
-        operations[0].sem_op = 1;
-        checkSystemCall(semop(semId, operations, 1), "Failed to unlock pool state");
+void Lifeguard::removeInactiveClients() {
+    std::lock_guard<std::mutex> lock(clientSocketsMutex);
+    std::vector<int> socketsToRemove;
 
-    } catch (const std::exception &e) {
-        std::cerr << "Error notifying clients: " << e.what() << std::endl;
-        struct sembuf op = {static_cast<unsigned short>(getPoolSemaphore()), 1, 0};
-        semop(semId, &op, 1);
-        throw;
+    for (int clientSocket: clientSockets) {
+        char buff;
+        int result = recv(clientSocket, &buff, 1, MSG_PEEK | MSG_DONTWAIT);
+        if (result == 0 || (result == -1 && errno != EAGAIN && errno != EWOULDBLOCK)) {
+            socketsToRemove.push_back(clientSocket);
+        }
+    }
+
+    for (int socketToRemove: socketsToRemove) {
+        auto it = std::find(clientSockets.begin(), clientSockets.end(), socketToRemove);
+        if (it != clientSockets.end()) {
+            close(socketToRemove);
+            clientSockets.erase(it);
+        }
     }
 }
 
@@ -164,14 +213,20 @@ void Lifeguard::run() {
                   (static_cast<unsigned>(getpid()) << 16) ^
                   (static_cast<unsigned>(pool->getType())));
 
-
             int rand_result = rand();
 
             if (!isEmergency.load()) {
                 if (rand_result % 100 < 10 && !poolClosed.load()) {
+                    struct sembuf lock = {static_cast<unsigned short>(pool->getPoolSemaphore()), -1, SEM_UNDO};
+                    semop(semId, &lock, 1);
+
+                    notifyClients(LIFEGUARD_ACTION_EVAC);
                     closePool();
                     std::this_thread::sleep_for(std::chrono::seconds(5));
                     openPool();
+
+                    struct sembuf unlock = {static_cast<unsigned short>(pool->getPoolSemaphore()), 1, SEM_UNDO};
+                    semop(semId, &unlock, 1);
                 }
 
                 if (rand() % 100 < 1) {
@@ -179,10 +234,45 @@ void Lifeguard::run() {
                 }
             }
 
-            std::this_thread::sleep_for(std::chrono::seconds(5));
+            std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     } catch (const std::exception &e) {
         std::cerr << "Fatal error in lifeguard: " << e.what() << std::endl;
         exit(1);
+    }
+}
+
+void Lifeguard::acceptClientLoop() {
+    fd_set readfds;
+    struct timeval tv;
+
+    while (shouldRun.load()) {
+        FD_ZERO(&readfds);
+        FD_SET(serverSocket, &readfds);
+
+        tv.tv_sec = 1;
+        tv.tv_usec = 0;
+
+        int result = select(serverSocket + 1, &readfds, nullptr, nullptr, &tv);
+
+        if (result > 0 && FD_ISSET(serverSocket, &readfds)) {
+            struct sockaddr_un clientAddr{};
+            socklen_t clientLen = sizeof(clientAddr);
+
+            int clientSocket = accept(serverSocket,
+                                      (struct sockaddr *) &clientAddr,
+                                      &clientLen);
+
+            if (clientSocket != -1) {
+                std::lock_guard<std::mutex> lock(clientSocketsMutex);
+                clientSockets.push_back(clientSocket);
+            }
+        }
+
+        static int checkCounter = 0;
+        if (++checkCounter >= 10) {
+            removeInactiveClients();
+            checkCounter = 0;
+        }
     }
 }

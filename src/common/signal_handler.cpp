@@ -50,10 +50,9 @@ void SignalHandler::handleSignal(int signal) {
             for (pid_t pid: *processes) {
                 if (pid > 0) {
                     kill(pid, SIGTERM);
+                    usleep(100000);  // 100ms
                 }
             }
-
-            sleep(1);
 
             for (pid_t pid: *processes) {
                 if (pid > 0) {
@@ -66,6 +65,7 @@ void SignalHandler::handleSignal(int signal) {
         cleanupIPC();
         exit(0);
     } else {
+        std::cout << "Process " << getpid() << " shutting down gracefully" << std::endl;
         childCleanupHandler();
         exit(0);
     }

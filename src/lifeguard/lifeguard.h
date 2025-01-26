@@ -5,34 +5,39 @@
 #include "error_handler.h"
 #include <atomic>
 #include <pthread.h>
+#include <thread>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <filesystem>
 
 class Lifeguard {
 private:
     Pool* pool;
     std::atomic<bool> poolClosed;
     std::atomic<bool> isEmergency;
-    int msgId;
     int semId;
     pthread_mutex_t stateMutex;
 
-    void notifyClients(int signal);
     void handleEmergency();
-    int getPoolSemaphore() const {
-        switch (pool->getType()) {
-            case Pool::PoolType::Olympic:
-                return SEM_OLYMPIC;
-            case Pool::PoolType::Recreational:
-                return SEM_RECREATIONAL;
-            case Pool::PoolType::Children:
-                return SEM_KIDS;
-            default:
-                throw PoolError("Unknown pool type");
-        }
-    }
 
+    int serverSocket;
+    std::vector<int> clientSockets;
+    std::string socketPath;
+    std::string generateSocketPath();
+    void setupSocketServer();
+    void notifyClients(int action);
+
+    std::thread acceptThread;
+    void acceptClientLoop();
+    std::atomic<bool> shouldRun;
+
+    std::mutex clientSocketsMutex;
+    void removeInactiveClients();
 
 public:
     explicit Lifeguard(Pool* pool);
+
+    ~Lifeguard();
 
     void run();
     void closePool();

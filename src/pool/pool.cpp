@@ -118,10 +118,13 @@ bool Pool::enter(Client &client) {
     newClient.guardianId = client.getGuardianId();
 
     state->currentCount++;
+
+    std::cout << "client " << client.getId() << " entered pool " << getName() << std::endl;
     return true;
 }
 
 void Pool::leave(int clientId) {
+    std::cout << "Pool.leave client " << clientId << " trying to leave" << std::endl;
     ScopedLock stateLock(stateMutex);
 
     std::vector<int> clientsToRemove;
@@ -129,14 +132,8 @@ void Pool::leave(int clientId) {
     for (int i = 0; i < state->currentCount; i++) {
         if (state->clients[i].id == clientId) {
             clientsToRemove.push_back(i);
-            if (state->clients[i].guardianId == -1) {
-                for (int j = 0; j < state->currentCount; j++) {
-                    if (state->clients[j].guardianId == clientId) {
-                        clientsToRemove.push_back(j);
-                        std::cout << "Dependent " << state->clients[j].id
-                                  << " leaving with guardian " << clientId << std::endl;
-                    }
-                }
+            if (state->clients[i].guardianId != -1) {
+                std::cout << "Dependent " << clientId << " candidate to leave" << std::endl;
             }
             break;
         }

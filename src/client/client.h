@@ -1,12 +1,15 @@
 #ifndef SO_PROJEKT_BASEN_CLIENT_H
 #define SO_PROJEKT_BASEN_CLIENT_H
 
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include <filesystem>
 #include <vector>
+#include <thread>
+#include <atomic>
 #include "pool.h"
 #include "ticket.h"
-#include <memory>
-#include <csignal>
-#include <thread>
 
 class Client {
 private:
@@ -30,16 +33,20 @@ private:
     bool isGuardian;
     void waitForTicket();
 
-    void handleEvacuationSignals();
-
     void moveToAnotherPool();
 
+    int clientSocket;
+    std::string socketPath;
+
+    void disconnectFromPool();
+    void connectToPool();
 
 public:
-    Client(int id, int age, bool isVip, bool hasSwimDiaper = false,
-           bool hasGuardian = false, int guardianId = -1);
+    Client(int id, int age, bool isVip, bool hasSwimDiaper = false, bool hasGuardian = false, int guardianId = -1);
 
-    ~Client() = default;
+    ~Client();
+
+    void leaveCurrentPool(int c_id = -1);
 
     void addDependent(Client *dependent);
 
@@ -62,6 +69,8 @@ public:
     bool getHasSwimDiaper() const { return hasSwimDiaper; }
 
     int getGuardianId() const { return guardianId; }
+
+    void handleSocketSignals();
 };
 
 #endif

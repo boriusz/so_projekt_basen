@@ -10,6 +10,7 @@ struct PoolState;
 #include <numeric>
 #include <algorithm>
 #include <pthread.h>
+#include "error_handler.h"
 
 class Client;
 
@@ -41,6 +42,19 @@ public:
     int getCapacity() { return capacity; }
 
     std::string getName();
+
+    int getPoolSemaphore() {
+        switch (this->getType()) {
+            case Pool::PoolType::Olympic:
+                return SEM_OLYMPIC;
+            case Pool::PoolType::Recreational:
+                return SEM_RECREATIONAL;
+            case Pool::PoolType::Children:
+                return SEM_KIDS;
+            default:
+                throw PoolError("Unknown pool type");
+        }
+    }
 
 
 private:

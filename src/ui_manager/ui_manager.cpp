@@ -104,7 +104,7 @@ void UIManager::displayPoolState(Pool *pool) const {
             std::cout << " - Client " << client.id
                       << " (Age: " << client.age
                       << (client.isVip ? ", VIP" : "")
-                      << (client.hasGuardian ? ", Has Guardian" : "")
+                      << (client.hasGuardian ? ", Has Guardian #" + std::to_string(client.guardianId) : "")
                       << ")\n";
         }
         std::cout << "\n";
