@@ -6,6 +6,7 @@
 #include "ticket.h"
 #include <memory>
 #include <csignal>
+#include <thread>
 
 class Client {
 private:
@@ -19,10 +20,12 @@ private:
     std::vector<Client *> dependents;
     int cashierMsgId;
     int lifeguardMsgId;
+    std::atomic<bool> shouldRun;
     std::unique_ptr<Ticket> ticket;
     bool hasEvacuated;
 
     int semId;
+    std::thread signalThread;
 
     bool isGuardian;
     void waitForTicket();
@@ -30,6 +33,7 @@ private:
     void handleEvacuationSignals();
 
     void moveToAnotherPool();
+
 
 public:
     Client(int id, int age, bool isVip, bool hasSwimDiaper = false,

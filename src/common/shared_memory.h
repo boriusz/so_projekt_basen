@@ -59,8 +59,8 @@ struct TicketMessage {
     bool isChild;
 };
 
-const long LIFEGUARD_ACTION_EVAC = 41080;
-const long LIFEGUARD_ACTION_RETURN = 41081;
+const int LIFEGUARD_ACTION_EVAC = 41080;
+const int LIFEGUARD_ACTION_RETURN = 41081;
 
 struct LifeguardMessage {
     long mtype;

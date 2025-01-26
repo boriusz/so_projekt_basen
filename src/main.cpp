@@ -152,7 +152,7 @@ void runMaintenanceThread() {
     auto maintenanceManager = MaintenanceManager::getInstance();
 
     while (shouldRun) {
-        std::this_thread::sleep_for(std::chrono::seconds(30));
+        std::this_thread::sleep_for(std::chrono::minutes(2));
         maintenanceManager->startMaintenance();
         std::this_thread::sleep_for(std::chrono::seconds(10));
         maintenanceManager->endMaintenance();

@@ -8,8 +8,9 @@
 #include <iostream>
 #include <sys/msg.h>
 #include <unistd.h>
+#include <thread>
 
-Client::Client(int id, int age, bool isVip, bool hasSwimDiaper, bool hasGuardian, int guardianId) {
+Client::Client(int id, int age, bool isVip, bool hasSwimDiaper, bool hasGuardian, int guardianId) : shouldRun(true) {
     try {
         validateAge(age);
 
@@ -93,50 +94,53 @@ void Client::waitForTicket() {
 }
 
 void Client::handleEvacuationSignals() {
-    LifeguardMessage msg{};
-    ssize_t received = msgrcv(lifeguardMsgId, &msg, sizeof(LifeguardMessage) - sizeof(long),
-                              id, IPC_NOWAIT);
+    while (shouldRun.load()) {
+        LifeguardMessage msg{};
 
-    if (received < 0) {
-        if (errno != ENOMSG) {
-            perror("msgrcv failed");
-        }
-        return;
-    }
+        ssize_t received = msgrcv(lifeguardMsgId, &msg, sizeof(LifeguardMessage) - sizeof(long),
+                                  id, 0);
 
-    if (msg.action == 1) {
-        std::cout << "Client " << id << " received evacuation signal from pool "
-                  << msg.poolId << std::endl;
-
-        if (currentPool) {
-            for (auto dependent: dependents) {
-                currentPool->leave(dependent->id);
+        if (received < 0) {
+            if (errno != EINTR) {
+                perror("msgrcv failed");
+                break;
             }
-            currentPool->leave(id);
-            currentPool = nullptr;
+            continue;
+        }
 
-            if (rand() % 100 < 30) {
-                std::cout << "Client " << id << " decides to wait for the pool to reopen" << std::endl;
-                hasEvacuated = true;
+        if (msg.action == LIFEGUARD_ACTION_EVAC) {
+            if (currentPool) {
                 for (auto dependent: dependents) {
-                    dependent->hasEvacuated = true;
+                    currentPool->leave(dependent->id);
                 }
-            } else {
-                std::cout << "Client " << id << " looking for another pool" << std::endl;
+                currentPool->leave(id);
+                currentPool = nullptr;
+
+                if (rand() % 100 < 30) {
+                    std::cout << "Client " << id << " decides to wait for the pool to reopen" << std::endl;
+                    hasEvacuated = true;
+                    for (auto dependent: dependents) {
+                        dependent->hasEvacuated = true;
+                    }
+                } else {
+                    std::cout << "Client " << id << " looking for another pool" << std::endl;
+                    moveToAnotherPool();
+                }
+            }
+        } else if (msg.action == LIFEGUARD_ACTION_RETURN) {
+            std::cout << "Client " << id << " received return signal for pool "
+                      << msg.poolId << std::endl;
+
+            hasEvacuated = false;
+            for (auto dependent: dependents) {
+                dependent->hasEvacuated = false;
+            }
+
+            if (!currentPool) {
                 moveToAnotherPool();
             }
-        }
-    } else if (msg.action == 2) {
-        std::cout << "Client " << id << " received return signal for pool "
-                  << msg.poolId << std::endl;
-
-        hasEvacuated = false;
-        for (auto dependent: dependents) {
-            dependent->hasEvacuated = false;
-        }
-
-        if (!currentPool) {
-            moveToAnotherPool();
+        } else {
+            std::cout << "Client #" << id << "received weird signal" << msg.action << std::endl;
         }
     }
 }
@@ -249,20 +253,11 @@ void Client::moveToAnotherPool() {
 
             retries++;
             if (retries < 3) {
-                std::cout << "Client " << id << " failed to enter pool, retrying... ("
-                          << retries << "/3)" << std::endl;
                 sleep(2);
             }
         }
 
         if (!currentPool) {
-            std::cout << "Client " << id << " could not find available pool after "
-                      << retries << " attempts - leaving facility" << std::endl;
-            if (ticket && ticket->isValid()) {
-                std::cout << "Client " << id << " leaving with "
-                          << ticket->getRemainingTime()
-                          << " minutes remaining on ticket" << std::endl;
-            }
             exit(0);
         }
 
@@ -279,7 +274,9 @@ void Client::run() {
     try {
         waitForTicket();
 
-        while (true) {
+        signalThread = std::thread([this] { handleEvacuationSignals(); });
+
+        while (shouldRun.load()) {
             if (!ticket || !ticket->isValid()) {
                 std::cout << "Client " << id << "'s ticket has expired "
                           << "(was valid for " << ticket->getValidityTime()
@@ -294,10 +291,11 @@ void Client::run() {
                         dependent->currentPool = nullptr;
                     }
                 }
-                exit(0);
+
+                shouldRun.store(false);
+                break;
             }
 
-            handleEvacuationSignals();
 
             if (!currentPool && !hasEvacuated) {
                 moveToAnotherPool();
@@ -305,7 +303,15 @@ void Client::run() {
 
             sleep(1);
         }
+
+        if (signalThread.joinable()) {
+            signalThread.join();
+        }
     } catch (const std::exception &e) {
+        shouldRun.store(false);
+        if (signalThread.joinable()) {
+            signalThread.join();
+        }
         std::cerr << "Error in client " << id << ": " << e.what() << std::endl;
         exit(1);
     }

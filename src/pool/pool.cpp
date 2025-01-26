@@ -143,7 +143,7 @@ void Pool::leave(int clientId) {
     }
 
     std::sort(clientsToRemove.begin(), clientsToRemove.end(), std::greater<>());
-    for (int index : clientsToRemove) {
+    for (int index: clientsToRemove) {
         state->clients[index] = state->clients[state->currentCount - 1];
         state->currentCount--;
         if (index == clientsToRemove.back()) {

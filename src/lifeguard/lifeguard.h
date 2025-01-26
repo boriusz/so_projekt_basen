@@ -15,7 +15,7 @@ private:
     int semId;
     pthread_mutex_t stateMutex;
 
-    void notifyClients(long signal);
+    void notifyClients(int signal);
     void handleEmergency();
     int getPoolSemaphore() const {
         switch (pool->getType()) {

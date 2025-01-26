@@ -7,6 +7,7 @@
 #include <sys/msg.h>
 #include <unistd.h>
 #include <csignal>
+#include <cstdlib>
 
 Lifeguard::Lifeguard(Pool *pool) : pool(pool), poolClosed(false), isEmergency(false) {
     try {
@@ -25,8 +26,7 @@ Lifeguard::Lifeguard(Pool *pool) : pool(pool), poolClosed(false), isEmergency(fa
     }
 }
 
-void Lifeguard::notifyClients(long signal) {
-    std::cout << "notifyclients" << std::endl;
+void Lifeguard::notifyClients(int action) {
     try {
         PoolState *state = pool->getState();
         if (!state) {
@@ -40,47 +40,52 @@ void Lifeguard::notifyClients(long signal) {
 
         checkSystemCall(semop(semId, operations, 1), "Failed to lock pool state");
 
+        int clientCount = state->currentCount;
+        std::vector<ClientData> clientsToNotify;
 
-        std::cout << "Notifying " << state->currentCount << " clients in "
-                  << pool->getName() << " pool" << std::endl;
+        clientsToNotify.reserve(clientCount);
+        for (int i = 0; i < clientCount; i++) {
+            clientsToNotify.push_back(state->clients[i]);
+        }
 
-        operations[0].sem_op = 1;
-        checkSystemCall(semop(semId, operations, 1), "Failed to unlock pool state");
-
-
-        for (int i = 0; i < state->currentCount; i++) {
-            auto client = state->clients[i];
-
+        for (const auto &client: clientsToNotify) {
             LifeguardMessage msg = {};
             msg.mtype = client.id;
             msg.poolId = static_cast<int>(pool->getType());
-            msg.action = static_cast<int>(signal);
+            msg.action = action;
 
-            if (msgsnd(msgId, &msg, sizeof(LifeguardMessage) - sizeof(long), IPC_NOWAIT) != -1) {
-                std::cout << "Sent " << (msg.action == 1 ? "evacuation" : "return")
-                          << " signal to client " << client.id << std::endl;
+            std::cout << "poolId: " << msg.poolId << std::endl;
+
+            if (msgsnd(msgId, &msg, sizeof(LifeguardMessage) - sizeof(long), 0) != -1) {
+                std::cout << "Sent " << (msg.action == LIFEGUARD_ACTION_EVAC ? "evacuation" : "return")
+                          << " signal to client #" << client.id << std::endl;
             }
         }
 
-        if (signal == LIFEGUARD_ACTION_EVAC) {
+        if (action == LIFEGUARD_ACTION_EVAC) {
             std::cout << "Waiting for clients to leave the pool..." << std::endl;
-            const int MAX_WAIT_TIME = 5;
+            const int MAX_WAIT_TIME = 10;
             int waitTime = 0;
 
             while (!pool->isEmpty() && waitTime < MAX_WAIT_TIME) {
+                operations[0].sem_op = 1;
+                checkSystemCall(semop(semId, operations, 1), "Failed to unlock pool state");
+
                 sleep(1);
                 waitTime++;
+
+                operations[0].sem_op = -1;
+                checkSystemCall(semop(semId, operations, 1), "Failed to lock pool state");
             }
 
             if (!pool->isEmpty()) {
                 std::cerr << "WARNING: Force removing remaining clients from pool" << std::endl;
-                operations[0].sem_op = -1;
-                checkSystemCall(semop(semId, operations, 1), "Failed to lock pool state");
                 state->currentCount = 0;
-                operations[0].sem_op = 1;
-                checkSystemCall(semop(semId, operations, 1), "Failed to unlock pool state");
             }
         }
+
+        operations[0].sem_op = 1;
+        checkSystemCall(semop(semId, operations, 1), "Failed to unlock pool state");
 
     } catch (const std::exception &e) {
         std::cerr << "Error notifying clients: " << e.what() << std::endl;
@@ -154,19 +159,27 @@ void Lifeguard::run() {
                 continue;
             }
 
+            time_t now = time(nullptr);
+            srand(static_cast<unsigned>(now) ^
+                  (static_cast<unsigned>(getpid()) << 16) ^
+                  (static_cast<unsigned>(pool->getType())));
+
+
+            int rand_result = rand();
+
             if (!isEmergency.load()) {
-                if (rand() % 100 < 20 && !poolClosed.load()) {
+                if (rand_result % 100 < 10 && !poolClosed.load()) {
                     closePool();
                     std::this_thread::sleep_for(std::chrono::seconds(5));
                     openPool();
                 }
 
-                if (rand() % 100 < 5) {
+                if (rand() % 100 < 1) {
                     handleEmergency();
                 }
             }
 
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            std::this_thread::sleep_for(std::chrono::seconds(5));
         }
     } catch (const std::exception &e) {
         std::cerr << "Fatal error in lifeguard: " << e.what() << std::endl;

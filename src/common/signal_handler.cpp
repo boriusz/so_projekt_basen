@@ -71,6 +71,19 @@ void SignalHandler::handleSignal(int signal) {
     }
 }
 
+void SignalHandler::handleChildProcess(int) {
+    int status;
+    pid_t pid;
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        if (processes) {
+            auto it = std::find(processes->begin(), processes->end(), pid);
+            if (it != processes->end()) {
+                processes->erase(it);
+            }
+        }
+    }
+}
+
 void SignalHandler::setupSignalHandling() {
     struct sigaction sa{};
     sa.sa_handler = handleSignal;
@@ -80,5 +93,12 @@ void SignalHandler::setupSignalHandling() {
     sigaction(SIGINT, &sa, nullptr);
     sigaction(SIGTERM, &sa, nullptr);
     sigaction(SIGQUIT, &sa, nullptr);
+
+    struct sigaction sa_chld{};
+    sa_chld.sa_handler = handleChildProcess;
+    sigemptyset(&sa_chld.sa_mask);
+    sa_chld.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+    sigaction(SIGCHLD, &sa_chld, nullptr);
+
     signal(SIGPIPE, SIG_IGN);
 }

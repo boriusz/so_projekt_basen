@@ -15,6 +15,7 @@ private:
     static std::function<void()> childCleanupHandler;
 
     static void cleanupIPC();
+    static void handleChildProcess(int signal);
 
 public:
     static void initialize(std::vector<pid_t> *procs, std::atomic<bool> *run);
