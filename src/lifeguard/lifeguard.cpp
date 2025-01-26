@@ -145,19 +145,8 @@ void Lifeguard::run() {
 
     try {
         while (true) {
-            std::cout << "lifeguard running" << std::endl;
-//            TODO fix, lifeguard freezes here
-            if (!WorkingHoursManager::isOpen()) {
-                if (!poolClosed.load()) {
-                    std::cout << "Closing pool - outside working hours" << std::endl;
-                    closePool();
-                }
-                std::this_thread::sleep_for(std::chrono::minutes(1));
-                continue;
-            }
-
             if (!isEmergency.load()) {
-                std::this_thread::sleep_for(std::chrono::seconds(rand() % 30 + 30));
+                std::this_thread::sleep_for(std::chrono::seconds(rand() % 100 + 30));
 
                 std::cout << "pool closed: " << poolClosed.load() << std::endl;
                 if (!poolClosed.load()) {
@@ -165,10 +154,10 @@ void Lifeguard::run() {
                     std::this_thread::sleep_for(std::chrono::seconds(5));
                     openPool();
                 }
-            }
 
-            if (rand() % 100 < 30) {
-                handleEmergency();
+                if (rand() % 100 < 5) {
+                    handleEmergency();
+                }
             }
 
             std::this_thread::sleep_for(std::chrono::seconds(1));

@@ -1,8 +1,6 @@
 #include "ui_manager.h"
 #include "working_hours_manager.h"
 #include <iostream>
-#include <iomanip>
-#include <unistd.h>
 
 std::mutex UIManager::instanceMutex;
 std::unique_ptr<UIManager> UIManager::instance;
@@ -135,12 +133,7 @@ void UIManager::startMonitoring() {
                     continue;
                 }
 
-                time_t now;
-                time(&now);
-                struct tm *timeinfo = localtime(&now);
-
-                std::cout << Color::MAGENTA << "Swimming Pool Monitor - "
-                          << std::put_time(timeinfo, "%H:%M:%S") << Color::RESET << "\n\n";
+                std::cout << Color::MAGENTA << "Swimming Pool Monitor - " << Color::RESET << "\n\n";
 
                 std::cout << "Status: " << (WorkingHoursManager::isOpen() ?
                                             Color::GREEN + "OPEN" : Color::RED + "CLOSED")

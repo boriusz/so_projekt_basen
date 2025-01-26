@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(COMMON_SOURCES
         src/pool_manager/pool_manager.cpp
-        src/working_hours_manager/working_hours_manager.h
+        src/working_hours_manager/working_hours_manager.cpp
         src/error_handler/error_handler.cpp
         src/ui_manager/ui_manager.cpp
         src/pool/pool.cpp
