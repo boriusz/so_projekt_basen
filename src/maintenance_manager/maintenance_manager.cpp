@@ -19,10 +19,6 @@ void MaintenanceManager::startMaintenance() {
     maintenanceInProgress.store(true);
 
     try {
-        if (WorkingHoursManager::isOpen()) {
-            throw PoolError("Cannot start maintenance during working hours");
-        }
-
         std::cout << "Starting facility-wide maintenance" << std::endl;
 
         auto poolManager = PoolManager::getInstance();

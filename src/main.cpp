@@ -152,12 +152,10 @@ void runMaintenanceThread() {
     auto maintenanceManager = MaintenanceManager::getInstance();
 
     while (shouldRun) {
-        if (!WorkingHoursManager::isOpen()) {
-            maintenanceManager->startMaintenance();
-            std::this_thread::sleep_for(std::chrono::minutes(30));
-            maintenanceManager->endMaintenance();
-        }
+        std::this_thread::sleep_for(std::chrono::seconds(30));
+        maintenanceManager->startMaintenance();
         std::this_thread::sleep_for(std::chrono::seconds(10));
+        maintenanceManager->endMaintenance();
     }
 }
 
@@ -190,7 +188,6 @@ int main() {
         auto poolManager = PoolManager::getInstance();
         poolManager->initialize();
 
-        sleep(1);
         processes.push_back(createLifeguard(Pool::PoolType::Olympic));
         processes.push_back(createLifeguard(Pool::PoolType::Recreational));
         processes.push_back(createLifeguard(Pool::PoolType::Children));
