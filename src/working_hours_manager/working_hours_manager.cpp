@@ -5,7 +5,6 @@ bool WorkingHoursManager::isOpen() {
     time_t now;
     time(&now);
     struct tm timeinfo {};
-    std::cout << "now: " << now << std::endl;
     localtime_r(&now, &timeinfo);
 
     int currentHour = timeinfo.tm_hour;

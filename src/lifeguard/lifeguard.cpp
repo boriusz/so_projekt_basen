@@ -155,10 +155,7 @@ void Lifeguard::run() {
             }
 
             if (!isEmergency.load()) {
-                std::this_thread::sleep_for(std::chrono::seconds(rand() % 100 + 30));
-
-                std::cout << "pool closed: " << poolClosed.load() << std::endl;
-                if (!poolClosed.load()) {
+                if (rand() % 100 < 20 && !poolClosed.load()) {
                     closePool();
                     std::this_thread::sleep_for(std::chrono::seconds(5));
                     openPool();

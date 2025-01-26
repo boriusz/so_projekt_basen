@@ -3,7 +3,6 @@
 #include "cashier.h"
 #include "client.h"
 #include "pool_manager.h"
-#include <sys/wait.h>
 #include <signal.h>
 #include <unistd.h>
 #include <vector>
@@ -191,6 +190,7 @@ int main() {
         auto poolManager = PoolManager::getInstance();
         poolManager->initialize();
 
+        sleep(1);
         processes.push_back(createLifeguard(Pool::PoolType::Olympic));
         processes.push_back(createLifeguard(Pool::PoolType::Recreational));
         processes.push_back(createLifeguard(Pool::PoolType::Children));
