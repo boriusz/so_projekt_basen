@@ -145,6 +145,15 @@ void Lifeguard::run() {
 
     try {
         while (true) {
+            if (!WorkingHoursManager::isOpen()) {
+                if (!poolClosed.load()) {
+                    std::cout << "Closing pool - outside working hours" << std::endl;
+                    closePool();
+                }
+                std::this_thread::sleep_for(std::chrono::minutes(1));
+                continue;
+            }
+
             if (!isEmergency.load()) {
                 std::this_thread::sleep_for(std::chrono::seconds(rand() % 100 + 30));
 
