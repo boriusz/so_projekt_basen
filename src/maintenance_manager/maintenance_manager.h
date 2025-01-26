@@ -5,6 +5,7 @@
 #include "working_hours_manager.h"
 #include <atomic>
 #include <thread>
+#include <condition_variable>
 
 class MaintenanceManager {
 private:

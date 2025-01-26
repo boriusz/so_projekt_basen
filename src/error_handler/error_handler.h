@@ -2,6 +2,7 @@
 #define SWIMMING_POOL_ERROR_HANDLER_H
 
 #include <string>
+#include <cstring>
 #include <stdexcept>
 #include <cerrno>
 

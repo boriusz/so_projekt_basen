@@ -4,6 +4,8 @@
 #include <vector>
 #include "pool.h"
 #include "ticket.h"
+#include <memory>
+#include <csignal>
 
 class Client {
 private:

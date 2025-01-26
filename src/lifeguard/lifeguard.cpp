@@ -6,6 +6,7 @@
 #include <chrono>
 #include <sys/msg.h>
 #include <unistd.h>
+#include <csignal>
 
 Lifeguard::Lifeguard(Pool *pool) : pool(pool), poolClosed(false), isEmergency(false) {
     try {

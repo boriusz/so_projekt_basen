@@ -6,6 +6,7 @@
 #include <ctime>
 #include <thread>
 #include <algorithm>
+#include <csignal>
 
 Cashier::Cashier() : currentTicketNumber(1), shouldRun(true) {
     try {

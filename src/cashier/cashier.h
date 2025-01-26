@@ -5,6 +5,8 @@
 #include "ticket.h"
 #include <vector>
 #include <thread>
+#include <atomic>
+#include <memory>
 
 class Cashier {
 private:
