@@ -65,7 +65,6 @@ void SignalHandler::handleSignal(int signal) {
         cleanupIPC();
         exit(0);
     } else {
-        std::cout << "Process " << getpid() << " shutting down gracefully" << std::endl;
         childCleanupHandler();
         exit(0);
     }

@@ -164,19 +164,10 @@ void Client::moveToAnotherPool() {
         int retries = 0;
 
         while (retries < 3 && !currentPool) {
-            std::vector<Client *> youngChildren;
-            std::vector<Client *> olderChildren;
+            Client* dependent = dependents.empty() ? nullptr : dependents[0];
 
-            for (auto dependent: dependents) {
-                if (dependent->getAge() <= 5) {
-                    youngChildren.push_back(dependent);
-                } else {
-                    olderChildren.push_back(dependent);
-                }
-            }
-
-            // Case 1: Guardian with young children (priority: children's pool)
-            if (!youngChildren.empty()) {
+            // Case 1: Guardian with young child (<=5 years) - children's pool
+            if (dependent && dependent->getAge() <= 5) {
                 auto childrenPool = poolManager->getPool(Pool::PoolType::Children);
                 struct sembuf lock = {static_cast<unsigned short>(childrenPool->getPoolSemaphore()), -1, SEM_UNDO};
 
@@ -185,61 +176,30 @@ void Client::moveToAnotherPool() {
                     continue;
                 }
 
-                bool success = false;
                 try {
-                    success = childrenPool->enter(*this);
-                    if (success) {
-                        bool allChildrenEntered = true;
-                        for (auto child: youngChildren) {
-                            if (!childrenPool->enter(*child)) {
-                                allChildrenEntered = false;
-                                break;
-                            }
-                        }
-
-                        if (allChildrenEntered) {
-                            currentPool = childrenPool;
-                            connectToPool();
-
-                            for (auto child: youngChildren) {
-                                child->currentPool = childrenPool;
-                            }
-
-                            // Try to place older children in recreational pool if any
-                            if (!olderChildren.empty()) {
-                                auto recPool = poolManager->getPool(Pool::PoolType::Recreational);
-                                struct sembuf recLock = {static_cast<unsigned short>(recPool->getPoolSemaphore()), -1,
-                                                         SEM_UNDO};
-
-                                if (semop(semId, &recLock, 1) != -1) {
-                                    for (auto child: olderChildren) {
-                                        if (!recPool->enter(*child)) {
-                                            std::cout << "Failed to place child " << child->getId()
-                                                      << " in recreational pool" << std::endl;
-                                        }
-                                    }
-                                    struct sembuf recUnlock = {static_cast<unsigned short>(recPool->getPoolSemaphore()),
-                                                               1, SEM_UNDO};
-                                    semop(semId, &recUnlock, 1);
-                                }
-                            }
-                        } else {
-                            // Cleanup if not all children could enter
+                    if (childrenPool->enter(*this) && childrenPool->enter(*dependent)) {
+                        currentPool = childrenPool;
+                        dependent->currentPool = childrenPool;
+                        connectToPool();
+                    } else {
+                        if (currentPool) {
                             childrenPool->leave(id);
-                            for (auto child: youngChildren) {
-                                childrenPool->leave(child->getId());
-                            }
-                            success = false;
+                            currentPool = nullptr;
+                        }
+                        if (dependent->currentPool) {
+                            childrenPool->leave(dependent->getId());
+                            dependent->currentPool = nullptr;
                         }
                     }
                 } catch (const std::exception &e) {
                     std::cerr << "Failed to connect to pool: " << e.what() << std::endl;
-                    if (success) {
-                        for (auto child: youngChildren) {
-                            childrenPool->leave(child->getId());
-                        }
+                    if (currentPool) {
                         childrenPool->leave(id);
                         currentPool = nullptr;
+                    }
+                    if (dependent->currentPool) {
+                        childrenPool->leave(dependent->getId());
+                        dependent->currentPool = nullptr;
                     }
                 }
 
@@ -247,8 +207,8 @@ void Client::moveToAnotherPool() {
                 semop(semId, &unlock, 1);
             }
 
-                // Case 2: Guardian with only older children or Child aged 6-17
-            else if (!olderChildren.empty() || (age >= 6 && age < 18)) {
+                // Case 2: Guardian with older child (>5 years) or Child aged 10-17 - recreational pool
+            else if (dependent || (age >= 10 && age < 18)) {
                 auto recPool = poolManager->getPool(Pool::PoolType::Recreational);
                 struct sembuf lock = {static_cast<unsigned short>(recPool->getPoolSemaphore()), -1, SEM_UNDO};
 
@@ -257,40 +217,28 @@ void Client::moveToAnotherPool() {
                     continue;
                 }
 
-                bool success = false;
                 try {
-                    success = recPool->enter(*this);
-                    if (success) {
-                        bool allChildrenEntered = true;
-                        for (auto child: olderChildren) {
-                            if (!recPool->enter(*child)) {
-                                allChildrenEntered = false;
-                                break;
-                            }
-                        }
-
-                        if (allChildrenEntered) {
-                            currentPool = recPool;
-                            connectToPool();
-
-                            for (auto child: olderChildren) {
-                                child->currentPool = recPool;
-                            }
-                        } else {
-                            // Cleanup if not all children could enter
-                            for (auto child: olderChildren) {
-                                recPool->leave(child->getId());
-                            }
+                    bool success = recPool->enter(*this);
+                    if (success && dependent) {
+                        if (!recPool->enter(*dependent)) {
                             recPool->leave(id);
                             success = false;
+                        } else {
+                            dependent->currentPool = recPool;
                         }
+                    }
+
+                    if (success) {
+                        currentPool = recPool;
+                        connectToPool();
                     }
                 } catch (const std::exception &e) {
                     std::cerr << "Failed to connect to pool: " << e.what() << std::endl;
-                    if (success) {
-                        for (auto child: olderChildren) {
-                            recPool->leave(child->getId());
-                        }
+                    if (dependent && dependent->currentPool) {
+                        recPool->leave(dependent->getId());
+                        dependent->currentPool = nullptr;
+                    }
+                    if (currentPool) {
                         recPool->leave(id);
                         currentPool = nullptr;
                     }
@@ -300,7 +248,7 @@ void Client::moveToAnotherPool() {
                 semop(semId, &unlock, 1);
             }
 
-                // Case 3: Adult without children
+                // Case 3: Adult without children - olympic pool
             else if (age >= 18) {
                 auto olympicPool = poolManager->getPool(Pool::PoolType::Olympic);
                 struct sembuf lock = {static_cast<unsigned short>(olympicPool->getPoolSemaphore()), -1, SEM_UNDO};
@@ -310,51 +258,20 @@ void Client::moveToAnotherPool() {
                     continue;
                 }
 
-                bool success = false;
                 try {
-                    success = olympicPool->enter(*this);
-                    if (success) {
+                    if (olympicPool->enter(*this)) {
                         currentPool = olympicPool;
                         connectToPool();
                     }
                 } catch (const std::exception &e) {
                     std::cerr << "Failed to connect to pool: " << e.what() << std::endl;
-                    if (success) {
+                    if (currentPool) {
                         olympicPool->leave(id);
                         currentPool = nullptr;
                     }
                 }
 
                 struct sembuf unlock = {static_cast<unsigned short>(olympicPool->getPoolSemaphore()), 1, SEM_UNDO};
-                semop(semId, &unlock, 1);
-            }
-
-                // Case 4: Young child with guardian (but guardian is not in our control)
-            else if (age <= 5 && hasGuardian) {
-                auto childrenPool = poolManager->getPool(Pool::PoolType::Children);
-                struct sembuf lock = {static_cast<unsigned short>(childrenPool->getPoolSemaphore()), -1, SEM_UNDO};
-
-                if (semop(semId, &lock, 1) == -1) {
-                    std::cerr << "Failed to lock children's pool semaphore" << std::endl;
-                    continue;
-                }
-
-                bool success = false;
-                try {
-                    success = childrenPool->enter(*this);
-                    if (success) {
-                        currentPool = childrenPool;
-                        connectToPool();
-                    }
-                } catch (const std::exception &e) {
-                    std::cerr << "Failed to connect to pool: " << e.what() << std::endl;
-                    if (success) {
-                        childrenPool->leave(id);
-                        currentPool = nullptr;
-                    }
-                }
-
-                struct sembuf unlock = {static_cast<unsigned short>(childrenPool->getPoolSemaphore()), 1, SEM_UNDO};
                 semop(semId, &unlock, 1);
             }
 
@@ -394,36 +311,13 @@ void Client::handleSocketSignals() {
                           << std::endl;
                 if (currentPool) {
                     for (auto dependent: dependents) {
-                        std::cout << "dependent " << dependent->id << " trying to leave"
-                                  << dependent->currentPool->getName() << std::endl;
-                        dependent->currentPool->leave(dependent->id);
-                        dependent->currentPool = nullptr;
-                        std::cout << "dependent " << dependent->id << " left the pool" << std::endl;
+                        dependent->leaveCurrentPool();
                     }
-                    std::cout << "client " << id << " trying to leave" << std::endl;
                     leaveCurrentPool();
-                    std::cout << "client " << id << " left the pool" << std::endl;
-
-                    if (rand() % 100 < 30) {
-                        hasEvacuated = true;
-                        for (auto dependent: dependents) {
-                            dependent->hasEvacuated = true;
-                        }
-                    } else {
-                        moveToAnotherPool();
-                    }
                 }
             } else if (msg.action == LIFEGUARD_ACTION_RETURN) {
                 std::cout << "Client " << id << " received return signal for pool "
                           << msg.poolId << std::endl;
-
-                if (hasEvacuated && !currentPool) {
-                    hasEvacuated = false;
-                    for (auto dependent: dependents) {
-                        dependent->hasEvacuated = false;
-                    }
-                    moveToAnotherPool();
-                }
             }
         }
 
@@ -461,6 +355,7 @@ void Client::run() {
 
 
             if (!currentPool && !hasEvacuated) {
+                std::cout << "Client " << id << " running moveToAnotherPool" << std::endl;
                 moveToAnotherPool();
             }
 

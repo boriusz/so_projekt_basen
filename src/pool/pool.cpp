@@ -131,6 +131,7 @@ void Pool::leave(int clientId) {
 
     for (int i = 0; i < state->currentCount; i++) {
         if (state->clients[i].id == clientId) {
+            std::cout << "Client " << clientId << " found in loop Pool.leave" << std::endl;
             clientsToRemove.push_back(i);
             if (state->clients[i].guardianId != -1) {
                 std::cout << "Dependent " << clientId << " candidate to leave" << std::endl;

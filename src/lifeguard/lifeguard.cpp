@@ -62,7 +62,7 @@ void Lifeguard::setupSocketServer() {
         throw PoolError("Nie można dowiązać socketa");
     }
 
-    if (listen(serverSocket, 10) == -1) {
+    if (listen(serverSocket, 150) == -1) {
         close(serverSocket);
         throw PoolError("Nie można rozpocząć nasłuchiwania");
     }

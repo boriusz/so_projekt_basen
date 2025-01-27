@@ -96,13 +96,10 @@ pid_t createClientWithPossibleDependent(int &clientId) {
 
     int guardianId = clientId++;
 
-    std::vector<int> childrenIds;
+    int childrenId = -1;
     bool isGuardian = (rand() % 100 < 20);
     if (isGuardian) {
-        int numChildren = rand() % 3 + 1;
-        for (int i = 0; i < numChildren; i++) {
-            childrenIds.push_back(clientId++);
-        }
+        childrenId = clientId++;
     }
 
     pid_t pid = fork();
@@ -124,13 +121,11 @@ pid_t createClientWithPossibleDependent(int &clientId) {
             Client *client = new Client(guardianId, age, isVip);
             client->setAsGuardian(isGuardian);
 
-            if (isGuardian && !childrenIds.empty()) {
-                for (int childId: childrenIds) {
-                    int childAge = (rand() % 9) + 1;
-                    bool needsDiaper = childAge <= 3;
-                    Client *child = new Client(childId, childAge, isVip, needsDiaper, true, client->getId());
-                    client->addDependent(child);
-                }
+            if (isGuardian && childrenId != -1) {
+                int childAge = (rand() % 9) + 1;
+                bool needsDiaper = childAge <= 3;
+                Client *child = new Client(childrenId, childAge, isVip, needsDiaper, true, client->getId());
+                client->addDependent(child);
             }
 
             SignalHandler::setChildCleanupHandler([client]() {
