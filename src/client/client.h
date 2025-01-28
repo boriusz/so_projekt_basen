@@ -27,10 +27,10 @@ private:
     std::unique_ptr<Ticket> ticket;
     bool hasEvacuated;
 
-    int semId;
     std::thread signalThread;
 
     bool isGuardian;
+
     void waitForTicket();
 
     void moveToAnotherPool();
@@ -38,10 +38,14 @@ private:
     int clientSocket;
     std::string socketPath;
 
-    void disconnectFromPool();
-    void connectToPool();
 
 public:
+    void disconnectFromPool();
+
+    void connectToPool();
+
+    void setCurrentPool(Pool *pool);
+
     Client(int id, int age, bool isVip, bool hasSwimDiaper = false, bool hasGuardian = false, int guardianId = -1);
 
     ~Client();
@@ -51,10 +55,6 @@ public:
     void addDependent(Client *dependent);
 
     void setAsGuardian(bool value) { isGuardian = value; }
-
-    [[nodiscard]] bool getIsGuardian() const { return isGuardian; }
-
-    [[nodiscard]] const std::vector<Client *> &getDependents() const { return dependents; };
 
     void run();
 

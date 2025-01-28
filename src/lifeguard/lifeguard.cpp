@@ -76,13 +76,13 @@ void Lifeguard::notifyClients(int action) {
         PoolState *state = pool->getState();
 
         if (action == LIFEGUARD_ACTION_RETURN) {
-            for (size_t j = 0; j < clientSockets.size(); j++) {
-                LifeguardMessage msg{
-                        static_cast<LifeguardMessage::Action>(action),
-                        static_cast<int>(pool->getType()),
-                        -1
-                };
+            LifeguardMessage msg{
+                    static_cast<LifeguardMessage::Action>(action),
+                    static_cast<int>(pool->getType()),
+                    -1
+            };
 
+            for (size_t j = 0; j < clientSockets.size(); j++) {
                 int result = send(clientSockets[j], &msg, sizeof(msg), MSG_NOSIGNAL);
                 if (result == -1) {
                     if (errno == EPIPE || errno == ECONNRESET) {
@@ -90,8 +90,7 @@ void Lifeguard::notifyClients(int action) {
                     }
                 }
             }
-        }
-        else if (action == LIFEGUARD_ACTION_EVAC) {
+        } else if (action == LIFEGUARD_ACTION_EVAC) {
             for (int i = 0; i < state->currentCount; i++) {
                 LifeguardMessage msg{
                         static_cast<LifeguardMessage::Action>(action),
@@ -120,7 +119,10 @@ void Lifeguard::notifyClients(int action) {
                           << clientSockets.size() << std::endl;
             }
         }
-    } catch (...) {}
+    } catch (const std::exception &e) {
+        std::cerr << "Error in notifyClients: " << e.what() << std::endl;
+        throw;
+    }
 }
 
 void Lifeguard::removeInactiveClients() {
@@ -171,6 +173,7 @@ void Lifeguard::closePool() {
     pthread_mutex_unlock(&stateMutex);
 
     notifyClients(LIFEGUARD_ACTION_EVAC);
+    std::cout << "clients notified for pool " << pool->getName() << std::endl;
 }
 
 void Lifeguard::openPool() {
@@ -184,7 +187,7 @@ void Lifeguard::openPool() {
         return;
     }
 
-    std::cout << "Lifeguard: Opening pool!" << std::endl;
+    std::cout << "Lifeguard: Opening pool! " << pool->getName() << std::endl;
     poolClosed.store(false);
 
     pthread_mutex_lock(&stateMutex);
@@ -196,6 +199,7 @@ void Lifeguard::openPool() {
 
 void Lifeguard::run() {
     signal(SIGTERM, [](int) { exit(0); });
+    bool hasGivenSomeTime = false;
 
     try {
         while (true) {
@@ -208,25 +212,24 @@ void Lifeguard::run() {
                 continue;
             }
 
+            if (!hasGivenSomeTime) {
+//    give the clients some time before closing the pool
+                sleep(5);
+                hasGivenSomeTime = true;
+            }
+
             time_t now = time(nullptr);
             srand(static_cast<unsigned>(now) ^
                   (static_cast<unsigned>(getpid()) << 16) ^
                   (static_cast<unsigned>(pool->getType())));
 
-            int rand_result = rand();
 
             if (!isEmergency.load()) {
-                if (rand_result % 100 < 10 && !poolClosed.load()) {
-                    struct sembuf lock = {static_cast<unsigned short>(pool->getPoolSemaphore()), -1, SEM_UNDO};
-                    semop(semId, &lock, 1);
-
+                if (rand() % 100 < 10 && !poolClosed.load()) {
                     notifyClients(LIFEGUARD_ACTION_EVAC);
                     closePool();
                     std::this_thread::sleep_for(std::chrono::seconds(5));
                     openPool();
-
-                    struct sembuf unlock = {static_cast<unsigned short>(pool->getPoolSemaphore()), 1, SEM_UNDO};
-                    semop(semId, &unlock, 1);
                 }
 
                 if (rand() % 100 < 1) {
@@ -234,7 +237,7 @@ void Lifeguard::run() {
                 }
             }
 
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            std::this_thread::sleep_for(std::chrono::seconds(3));
         }
     } catch (const std::exception &e) {
         std::cerr << "Fatal error in lifeguard: " << e.what() << std::endl;

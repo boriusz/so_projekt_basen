@@ -61,92 +61,121 @@ Pool::Pool(Pool::PoolType poolType, int capacity, int minAge, int maxAge,
 
 }
 
-bool Pool::enter(Client &client) {
-    ScopedLock stateLock(stateMutex);
-    if (state->isClosed) return false;
-    if (state->currentCount >= capacity) return false;
 
-    if (state->currentCount >= capacity) {
-        std::cout << "Pool is at capacity, client " << client.getId() << " cannot enter" << std::endl;
+bool Pool::enter(Client &client) {
+    struct sembuf lock = {static_cast<unsigned short>(getPoolSemaphore()), -1, SEM_UNDO};
+    struct sembuf unlock = {static_cast<unsigned short>(getPoolSemaphore()), 1, SEM_UNDO};
+
+    if (semop(semId, &lock, 1) == -1) {
+        std::cout << "Failed to acquire semaphore for pool " << getName()
+                  << ", errno: " << errno << " (" << strerror(errno) << ")" << std::endl;
         return false;
     }
 
-    if (poolType == PoolType::Children) {
-        if (client.getAge() <= 5) {
-            if (!client.getHasGuardian()) {
-                std::cout << "Child " << client.getId() << " needs a guardian to enter children's pool" << std::endl;
-                return false;
-            }
-        } else {
-            const auto &dependents = client.getDependents();
-            if (dependents.empty()) {
-                std::cout << "Adult " << client.getId() << " can only enter children's pool as a guardian" << std::endl;
-                return false;
-            }
+    try {
+        ScopedLock stateLock(stateMutex);
+        std::cout << "Client " << client.getId() << " trying to enter pool" << getName() << std::endl;
 
-            bool hasValidChild = false;
-            for (const auto &child: dependents) {
-                if (child->getAge() <= 5) {
-                    hasValidChild = true;
-                    break;
-                }
-            }
-            if (!hasValidChild) {
-                std::cout << "Guardian " << client.getId() << " has no children under 5 years old" << std::endl;
-                return false;
-            }
-        }
-
-        if (client.getAge() <= 3 && !client.getHasSwimDiaper()) {
-            std::cout << "Child " << client.getId() << " needs swim diapers" << std::endl;
+        if (state->isClosed) {
+            std::cout << "Pool " << getName() << " is closed" << std::endl;
+            semop(semId, &unlock, 1);
             return false;
         }
+
+        if (state->currentCount >= capacity) {
+            std::cout << "Pool " << getName() << " is at capacity: "
+                      << state->currentCount << "/" << capacity << std::endl;
+            semop(semId, &unlock, 1);
+            return false;
+        }
+
+        if (poolType == PoolType::Recreational) {
+            double totalAge = client.getAge();
+            for (int i = 0; i < state->currentCount; i++) {
+                totalAge += state->clients[i].age;
+            }
+            double newAverageAge = totalAge / (state->currentCount + 1);
+
+            if (newAverageAge > maxAverageAge) {
+                std::cout << "Client " << client.getId() << " would increase average age above limit ("
+                          << newAverageAge << " > " << maxAverageAge << ")" << std::endl;
+                semop(semId, &unlock, 1);
+                return false;
+            }
+        }
+        std::cout << "before connect" << std::endl;
+        client.setCurrentPool(this);
+        client.connectToPool();
+        std::cout << "after connect" << std::endl;
+
+        ClientData &newClient = state->clients[state->currentCount];
+        newClient.id = client.getId();
+        newClient.age = client.getAge();
+        newClient.isVip = client.getIsVip();
+        newClient.hasSwimDiaper = client.getHasSwimDiaper();
+        newClient.hasGuardian = client.getHasGuardian();
+        newClient.guardianId = client.getGuardianId();
+
+        state->currentCount++;
+
+        std::cout << "Client " << client.getId()
+                  << " added to pool " << getName() << std::endl;
+
+        if (semop(semId, &unlock, 1) == -1) {
+            std::cout << "Failed to release semaphore for pool " << getName()
+                      << ", errno: " << errno << " (" << strerror(errno) << ")" << std::endl;
+            throw PoolSystemError("Failed to release pool semaphore in enter()");
+        }
+
+        return true;
+    } catch (const std::exception &e) {
+        std::cout << "Exception in enter() for pool " << getName()
+                  << ": " << e.what() << std::endl;
+        semop(semId, &unlock, 1);
+        throw;
     }
-
-    if (client.getAge() < minAge || client.getAge() > maxAge) {
-        std::cout << "Client " << client.getId() << " age (" << client.getAge()
-                  << ") outside pool limits [" << minAge << ", " << maxAge << "]" << std::endl;
-        return false;
-    }
-
-    ClientData &newClient = state->clients[state->currentCount];
-    newClient.id = client.getId();
-    newClient.age = client.getAge();
-    newClient.isVip = client.getIsVip();
-    newClient.hasSwimDiaper = client.getHasSwimDiaper();
-    newClient.hasGuardian = client.getHasGuardian();
-    newClient.guardianId = client.getGuardianId();
-
-    state->currentCount++;
-
-    std::cout << "client " << client.getId() << " entered pool " << getName() << std::endl;
-    return true;
 }
 
 void Pool::leave(int clientId) {
     std::cout << "Pool.leave client " << clientId << " trying to leave" << std::endl;
-    ScopedLock stateLock(stateMutex);
 
-    std::vector<int> clientsToRemove;
-
-    for (int i = 0; i < state->currentCount; i++) {
-        if (state->clients[i].id == clientId) {
-            std::cout << "Client " << clientId << " found in loop Pool.leave" << std::endl;
-            clientsToRemove.push_back(i);
-            if (state->clients[i].guardianId != -1) {
-                std::cout << "Dependent " << clientId << " candidate to leave" << std::endl;
-            }
-            break;
-        }
+    struct sembuf lock = {static_cast<unsigned short>(getPoolSemaphore()), -1, SEM_UNDO};
+    if (semop(semId, &lock, 1) == -1) {
+        throw PoolSystemError("Failed to acquire pool semaphore in leave()");
     }
+    std::cout << "Pool.leave client " << clientId << " acquired lock" << std::endl;
 
-    std::sort(clientsToRemove.begin(), clientsToRemove.end(), std::greater<>());
-    for (int index: clientsToRemove) {
-        state->clients[index] = state->clients[state->currentCount - 1];
-        state->currentCount--;
-        if (index == clientsToRemove.back()) {
-            std::cout << "Client " << clientId << " left the pool" << std::endl;
+    try {
+        ScopedLock stateLock(stateMutex);
+        std::vector<int> clientsToRemove;
+
+        for (int i = 0; i < state->currentCount; i++) {
+            if (state->clients[i].id == clientId || state->clients[i].guardianId == clientId) {
+                clientsToRemove.push_back(i);
+            }
         }
+
+        std::sort(clientsToRemove.begin(), clientsToRemove.end(), std::greater<>());
+
+        for (int index: clientsToRemove) {
+            if (index < state->currentCount) {
+                state->clients[index] = state->clients[state->currentCount - 1];
+                state->currentCount--;
+                if (index == clientsToRemove.back()) {
+                    std::cout << "Pool.leave Client " << clientId << " left the pool" << std::endl;
+                }
+            }
+        }
+
+        struct sembuf unlock = {static_cast<unsigned short>(getPoolSemaphore()), 1, SEM_UNDO};
+        if (semop(semId, &unlock, 1) == -1) {
+            throw PoolSystemError("Failed to release pool semaphore in leave()");
+        }
+
+    } catch (const std::exception &e) {
+        struct sembuf unlock = {static_cast<unsigned short>(getPoolSemaphore()), 1, SEM_UNDO};
+        semop(semId, &unlock, 1);
+        throw;
     }
 }
 

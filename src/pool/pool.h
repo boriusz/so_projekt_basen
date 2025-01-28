@@ -85,6 +85,8 @@ private:
 
         ScopedLock &operator=(const ScopedLock &) = delete;
     };
+
+    bool enterWithDependent(Client &client, Client &dependent);
 };
 
 #endif //SO_PROJEKT_BASEN_POOL_H
