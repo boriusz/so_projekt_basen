@@ -73,13 +73,10 @@ void Lifeguard::notifyClients(int action) {
     std::vector<int> socketsToRemove;
 
     try {
-        PoolState *state = pool->getState();
-
         if (action == LIFEGUARD_ACTION_RETURN) {
             LifeguardMessage msg{
                     static_cast<LifeguardMessage::Action>(action),
-                    static_cast<int>(pool->getType()),
-                    -1
+                    static_cast<int>(pool->getType())
             };
 
             for (size_t j = 0; j < clientSockets.size(); j++) {
@@ -91,19 +88,15 @@ void Lifeguard::notifyClients(int action) {
                 }
             }
         } else if (action == LIFEGUARD_ACTION_EVAC) {
-            for (int i = 0; i < state->currentCount; i++) {
-                LifeguardMessage msg{
-                        static_cast<LifeguardMessage::Action>(action),
-                        static_cast<int>(pool->getType()),
-                        state->clients[i].id
-                };
-
-                for (size_t j = 0; j < clientSockets.size(); j++) {
-                    int result = send(clientSockets[j], &msg, sizeof(msg), MSG_NOSIGNAL);
-                    if (result == -1) {
-                        if (errno == EPIPE || errno == ECONNRESET) {
-                            socketsToRemove.push_back(clientSockets[j]);
-                        }
+            LifeguardMessage msg{
+                    static_cast<LifeguardMessage::Action>(action),
+                    static_cast<int>(pool->getType())
+            };
+            for (size_t j = 0; j < clientSockets.size(); j++) {
+                int result = send(clientSockets[j], &msg, sizeof(msg), MSG_NOSIGNAL);
+                if (result == -1) {
+                    if (errno == EPIPE || errno == ECONNRESET) {
+                        socketsToRemove.push_back(clientSockets[j]);
                     }
                 }
             }
@@ -223,10 +216,8 @@ void Lifeguard::run() {
                   (static_cast<unsigned>(getpid()) << 16) ^
                   (static_cast<unsigned>(pool->getType())));
 
-
             if (!isEmergency.load()) {
                 if (rand() % 100 < 10 && !poolClosed.load()) {
-                    notifyClients(LIFEGUARD_ACTION_EVAC);
                     closePool();
                     std::this_thread::sleep_for(std::chrono::seconds(5));
                     openPool();

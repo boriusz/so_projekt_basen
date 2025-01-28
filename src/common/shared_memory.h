@@ -68,7 +68,6 @@ struct LifeguardMessage {
         RETURN = 41081
     } action;
     int poolId;
-    int clientId;
 };
 
 const long CLIENT_REQUEST_VIP_M_TYPE = 31080;

@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <thread>
 #include <sys/file.h>
+#include <csignal>
 
 Client::Client(int id, int age, bool isVip, bool hasSwimDiaper, bool hasGuardian, int guardianId) : shouldRun(true),
                                                                                                     clientSocket(-1) {
