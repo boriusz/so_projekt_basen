@@ -5,15 +5,12 @@
 #include "working_hours_manager.h"
 #include <atomic>
 #include <thread>
-#include <condition_variable>
 
 class MaintenanceManager {
 private:
     static MaintenanceManager *instance;
     std::atomic<bool> maintenanceInProgress;
-    std::atomic<bool> maintenanceRequested{false};
     std::mutex maintenanceMutex;
-    std::condition_variable cv;
 
     MaintenanceManager() : maintenanceInProgress(false) {}
 
@@ -24,8 +21,6 @@ public:
     void startMaintenance();
 
     void endMaintenance();
-
-    void requestMaintenance();
 
     MaintenanceManager(const MaintenanceManager &) = delete;
 

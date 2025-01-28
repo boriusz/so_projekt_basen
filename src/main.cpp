@@ -179,8 +179,8 @@ void initializeWorkingHours() {
         exit(1);
     }
 
-    shm->workingHours[0] = 0;  // Tp
-    shm->workingHours[1] = 24; // Tk
+    shm->workingHours[0] = 8;  // Tp
+    shm->workingHours[1] = 22; // Tk
 
     shmdt(shm);
 }

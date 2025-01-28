@@ -74,11 +74,3 @@ void MaintenanceManager::endMaintenance() {
     poolManager->getPool(Pool::PoolType::Recreational)->reopenAfterMaintenance();
     poolManager->getPool(Pool::PoolType::Children)->reopenAfterMaintenance();
 }
-
-void MaintenanceManager::requestMaintenance() {
-    std::lock_guard<std::mutex> lock(maintenanceMutex);
-    if (!maintenanceRequested.load() && !maintenanceInProgress.load()) {
-        maintenanceRequested.store(true);
-        cv.notify_one();
-    }
-}

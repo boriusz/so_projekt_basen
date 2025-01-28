@@ -140,17 +140,19 @@ void Lifeguard::removeInactiveClients() {
 }
 
 void Lifeguard::handleEmergency() {
-    std::cout << "EMERGENCY: Immediate pool evacuation required!" << std::endl;
+    std::cout << "EMERGENCY: Immediate pool evacuation required for pool " << pool->getName() << std::endl;
     closePool();
     isEmergency.store(true);
 
-    const int EMERGENCY_WAIT_TIME = 10;
+    const int EMERGENCY_WAIT_TIME = 20;
     int waitTime = 0;
 
     while (!pool->isEmpty() && waitTime < EMERGENCY_WAIT_TIME) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         waitTime++;
     }
+
+    std::cout << "EMERGENCY: Emergency ended for pool " << pool->getName() << std::endl;
 
     if (!pool->isEmpty()) {
         std::cerr << "CRITICAL: Pool not empty after emergency evacuation!" << std::endl;
