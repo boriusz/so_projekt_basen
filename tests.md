@@ -262,6 +262,9 @@ _Test sprawdza działanie systemu podczas okresowej konserwacji i wymiany wody._
 - Żaden nowy klient nie może wejść podczas konserwacji
 - Po zakończeniu konserwacji obiekt wraca do normalnego funkcjonowania
 
+### Zmiany w kodzie
+dla ułatwienia testowania należy w `runMaintenanceThread` zmniejszyć czas oczekiwania na przerwę techiczną
+
 ### Przebieg testu
 
 Scenariusz testowy:
