@@ -148,7 +148,7 @@ void Lifeguard::handleEmergency() {
     int waitTime = 0;
 
     while (!pool->isEmpty() && waitTime < EMERGENCY_WAIT_TIME) {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        //std::this_thread::// sleep_for(std::chrono::seconds(1));
         waitTime++;
     }
 
@@ -209,17 +209,17 @@ void Lifeguard::run() {
                 isMaintenance.store(true);
                 std::cout << "Zamykamy basen na konserwacje!" << std::endl;
                 closePool();
-                std::this_thread::sleep_for(std::chrono::seconds (1));
+                //std::this_thread::// sleep_for(std::chrono::seconds (1));
                 continue;
             } else if (poolClosed.load()) {
                 openPool();
-                std::this_thread::sleep_for(std::chrono::seconds (1));
+                //std::this_thread::// sleep_for(std::chrono::seconds (1));
                 continue;
             }
             if (!WorkingHoursManager::isOpen()) {
                 std::cout << "Poza godzinami pracy" << std::endl;
                 pool->getState()->isClosed = true;
-                std::this_thread::sleep_for(std::chrono::seconds (1));
+                //std::this_thread::// sleep_for(std::chrono::seconds (1));
                 continue;
             }
             if (!isMaintenance && !pool->getState()->isUnderMaintenance && !isEmergency && pool->getState()->isClosed) {
@@ -228,7 +228,7 @@ void Lifeguard::run() {
 
             if (!hasGivenSomeTime) {
 //    give the clients some time before closing the pool
-                sleep(5);
+                // sleep(5);
                 hasGivenSomeTime = true;
             }
 
@@ -240,7 +240,7 @@ void Lifeguard::run() {
             if (!isEmergency.load()) {
                 if (rand() % 100 < 10 && !poolClosed.load()) {
                     closePool();
-                    std::this_thread::sleep_for(std::chrono::seconds(5));
+                    //std::this_thread::// sleep_for(std::chrono::seconds(5));
                     openPool();
                 }
 
@@ -249,7 +249,7 @@ void Lifeguard::run() {
                 }
             }
 
-            std::this_thread::sleep_for(std::chrono::seconds(3));
+            //std::this_thread::// sleep_for(std::chrono::seconds(3));
         }
     } catch (const std::exception &e) {
         std::cerr << "Fatal error in lifeguard: " << e.what() << std::endl;

@@ -53,7 +53,7 @@ void SignalHandler::handleSignal(int signal) {
             for (pid_t pid: *processes) {
                 if (pid > 0) {
                     kill(pid, SIGTERM);
-                    usleep(100000);  // 100ms
+//                    u// sleep(100000);  // 100ms
                 }
             }
 
