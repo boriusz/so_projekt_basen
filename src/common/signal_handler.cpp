@@ -45,15 +45,12 @@ void SignalHandler::cleanupIPC() {
 
 void SignalHandler::handleSignal(int signal) {
     if (isMainProcess) {
-        std::cout << "\nReceived signal " << signal << std::endl;
-
         if (shouldRun) shouldRun->store(false);
 
         if (processes) {
             for (pid_t pid: *processes) {
                 if (pid > 0) {
                     kill(pid, SIGTERM);
-                    usleep(100000);  // 100ms
                 }
             }
 

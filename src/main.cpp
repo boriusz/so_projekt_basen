@@ -10,6 +10,22 @@
 #include "maintenance_manager.h"
 #include "signal_handler.h"
 
+#ifdef __APPLE__
+
+#include <pthread.h>
+
+#else
+#include <sys/prctl.h>
+#endif
+
+void setProcessName(const char *name) {
+#ifdef __APPLE__
+    pthread_setname_np(name);
+#else
+    prctl(PR_SET_NAME, name);
+#endif
+}
+
 int shmId = -1;
 int semId = -1;
 int msgId = -1;
@@ -29,7 +45,7 @@ void initializeIPC() {
     }
 
     unsigned short values[SEM_COUNT];
-    for (auto & value : values) {
+    for (auto &value: values) {
         value = 1;
     }
 
@@ -58,10 +74,11 @@ void initializeIPC() {
 pid_t createLifeguard(Pool::PoolType poolType) {
     pid_t pid = fork();
     if (pid == 0) {
+        Pool *pool = PoolManager::getInstance()->getPool(poolType);
+        setProcessName(std::string("swimming_pool_lifeguard_" + pool->getName()).c_str());
         SignalHandler::setChildProcess();
         SignalHandler::setChildCleanupHandler([poolType]() {
         });
-        Pool *pool = PoolManager::getInstance()->getPool(poolType);
         Lifeguard lifeguard(pool);
         lifeguard.run();
         exit(0);
@@ -72,6 +89,7 @@ pid_t createLifeguard(Pool::PoolType poolType) {
 pid_t createCashier() {
     pid_t pid = fork();
     if (pid == 0) {
+        setProcessName("swimming_pool_cashier");
         try {
             Cashier cashier;
             SignalHandler::setChildProcess();
@@ -92,6 +110,7 @@ pid_t createClientWithPossibleDependent(int &clientId) {
     }
 
     int guardianId = clientId++;
+    srand(guardianId);
 
     int childrenId = -1;
     bool isGuardian = (rand() % 100 < 20);
@@ -100,8 +119,8 @@ pid_t createClientWithPossibleDependent(int &clientId) {
     }
 
     pid_t pid = fork();
-    srand(guardianId);
     if (pid == 0) {
+        setProcessName(std::string("swimming_pool_client_" + std::to_string(guardianId)).c_str());
         try {
             SignalHandler::setChildProcess();
 
@@ -149,7 +168,7 @@ void runMaintenanceThread() {
         maintenanceManager->startMaintenance();
         std::this_thread::sleep_for(std::chrono::seconds(10));
         maintenanceManager->endMaintenance();
-        std::this_thread::sleep_for(std::chrono::minutes (2));
+        std::this_thread::sleep_for(std::chrono::minutes(2));
     }
 }
 
@@ -161,12 +180,31 @@ void initializeWorkingHours() {
     }
 
     shm->workingHours[0] = 8;  // Tp
-    shm->workingHours[1] = 22; // Tk
+    shm->workingHours[1] = 24; // Tk
 
     shmdt(shm);
 }
 
+std::mutex terminationMutex;
+
+void processCollector() {
+    while (shouldRun) {
+        int status;
+        pid_t pid;
+        while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+            std::lock_guard<std::mutex> lock(terminationMutex);
+            auto it = std::find(processes.begin(), processes.end(), pid);
+            if (it != processes.end()) {
+                processes.erase(it);
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+}
+
 int main() {
+    SignalHandler::initialize(&processes, &shouldRun);
+    SignalHandler::setupSignalHandling();
     srand(time(nullptr));
 
     try {
@@ -174,28 +212,55 @@ int main() {
         initializeWorkingHours();
 
         auto maintenanceThread = std::thread(&runMaintenanceThread);
+        auto processesCollectorThread = std::thread(&processCollector);
 
-
-        SignalHandler::initialize(&processes, &shouldRun);
-        SignalHandler::setupSignalHandling();
 
         auto poolManager = PoolManager::getInstance();
         poolManager->initialize();
 
-        processes.push_back(createLifeguard(Pool::PoolType::Olympic));
-        processes.push_back(createLifeguard(Pool::PoolType::Recreational));
-        processes.push_back(createLifeguard(Pool::PoolType::Children));
-        processes.push_back(createCashier());
+        for (auto poolType: {Pool::PoolType::Olympic, Pool::PoolType::Recreational, Pool::PoolType::Children}) {
+            pid_t pid = createLifeguard(poolType);
+            if (pid == -1) {
+                perror("Critical error: Could not create lifeguard process");
+                shouldRun = false;
+                break;
+            }
+            processes.push_back(pid);
+        }
+
+        pid_t cashierPid = createCashier();
+        if (cashierPid == -1) {
+            perror("Critical error: Could not create cashier process");
+            shouldRun = false;
+        } else {
+            processes.push_back(cashierPid);
+        }
 
         int clientId = 1;
+        int consecutiveErrors = 0;
+        const int MAX_CONSECUTIVE_ERRORS = 5;
+
         while (shouldRun) {
             if (WorkingHoursManager::isOpen()) {
                 pid_t clientPid = createClientWithPossibleDependent(clientId);
-                if (clientPid > 0) {
+                if (clientPid == -1) {
+                    consecutiveErrors++;
+                    if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                        perror("Critical error: Too many consecutive fork failures");
+                        shouldRun = false;
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                } else if (clientPid > 0) {
+                    consecutiveErrors = 0;
                     processes.push_back(clientPid);
                 }
             }
             sleep(1);
+        }
+
+        if (processesCollectorThread.joinable()) {
+            processesCollectorThread.join();
         }
 
         if (maintenanceThread.joinable()) {
@@ -205,7 +270,6 @@ int main() {
         return 0;
     } catch (const std::exception &e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;
-        SignalHandler::handleSignal(SIGTERM);
         return 1;
     }
 }
