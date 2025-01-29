@@ -205,18 +205,25 @@ void Lifeguard::run() {
 
     try {
         while (true) {
-            if (!WorkingHoursManager::isOpen()) {
-                if (!poolClosed.load()) {
-                    isMaintenance.store(true);
-                    std::cout << "Zamykamy basen!" << std::endl;
-                    closePool();
-                }
+            if (pool->getState()->isUnderMaintenance) {
+                isMaintenance.store(true);
+                std::cout << "Zamykamy basen na konserwacje!" << std::endl;
+                closePool();
+                std::this_thread::sleep_for(std::chrono::seconds (1));
+                continue;
+            } else if (poolClosed.load()) {
+                openPool();
                 std::this_thread::sleep_for(std::chrono::seconds (1));
                 continue;
             }
-            if (isMaintenance && poolClosed.load()) {
-                isMaintenance.store(false);
-                openPool();
+            if (!WorkingHoursManager::isOpen()) {
+                std::cout << "Poza godzinami pracy" << std::endl;
+                pool->getState()->isClosed = true;
+                std::this_thread::sleep_for(std::chrono::seconds (1));
+                continue;
+            }
+            if (!isMaintenance && !pool->getState()->isUnderMaintenance && !isEmergency && pool->getState()->isClosed) {
+                pool->getState()->isClosed = false;
             }
 
             if (!hasGivenSomeTime) {
