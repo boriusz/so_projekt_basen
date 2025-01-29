@@ -142,7 +142,8 @@ pid_t createClientWithPossibleDependent(int &clientId) {
             if (isGuardian && childrenId != -1) {
                 int childAge = (rand() % 9) + 1;
                 bool needsDiaper = childAge <= 3;
-                Client *child = new Client(childrenId, childAge, isVip, needsDiaper, true, client->getId());
+                int hasDiaper = needsDiaper && (rand() % 100 < 80); //20% of clients forget to take one
+                Client *child = new Client(childrenId, childAge, isVip, hasDiaper, true, client->getId());
                 client->addDependent(child);
             }
 

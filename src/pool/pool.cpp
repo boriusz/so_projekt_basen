@@ -70,11 +70,16 @@ bool Pool::enter(Client &client) {
         return false;
     }
 
+    if (client.getAge() <= 3 && !client.getHasSwimDiaper()) {
+        std::cout << "Klient " << client.getId() << " nie może wejść na basen bez pieluch do pływania" << std::endl;
+        return false;
+    }
+
     try {
         ScopedLock stateLock(stateMutex);
 
         if (state->isClosed) {
-            std::cout << "Próba wejścia na zamknięty basen "<< getName() << " - odmowa!" << std::endl;
+            std::cout << "Próba wejścia na zamknięty basen " << getName() << " - odmowa!" << std::endl;
             semop(semId, &unlock, 1);
             return false;
         }
