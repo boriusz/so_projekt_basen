@@ -168,16 +168,14 @@ void initializeWorkingHours() {
 
 int main() {
     srand(time(nullptr));
+    SignalHandler::initialize(&processes, &shouldRun);
+    SignalHandler::setupSignalHandling();
 
     try {
         initializeIPC();
         initializeWorkingHours();
 
-        auto maintenanceThread = std::thread(&runMaintenanceThread);
-
-
-        SignalHandler::initialize(&processes, &shouldRun);
-        SignalHandler::setupSignalHandling();
+//        auto maintenanceThread = std::thread(&runMaintenanceThread);
 
         auto poolManager = PoolManager::getInstance();
         poolManager->initialize();
