@@ -3,6 +3,7 @@
 
 void checkSystemCall(int result, const std::string &operation) {
     if (result == -1) {
+        perror(operation.c_str());
         throw PoolSystemError(operation);
     }
 }

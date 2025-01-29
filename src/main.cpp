@@ -219,6 +219,10 @@ int main() {
             sleep(1);
         }
 
+        if (maintenanceThread.joinable()) {
+            maintenanceThread.join();
+        }
+
         return 0;
     } catch (const std::exception &e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;
