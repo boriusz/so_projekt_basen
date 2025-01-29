@@ -76,7 +76,7 @@ pid_t createLifeguard(Pool::PoolType poolType) {
     pid_t pid = fork();
     if (pid == 0) {
         Pool *pool = PoolManager::getInstance()->getPool(poolType);
-        setProcessName(std::string("swimming_pool_lifeguard_" + pool->getName()).c_str());
+        setProcessName(std::string("lifeguard_" + pool->getName()).c_str());
         SignalHandler::setChildProcess();
         SignalHandler::setChildCleanupHandler([poolType]() {
         });
@@ -90,7 +90,7 @@ pid_t createLifeguard(Pool::PoolType poolType) {
 pid_t createCashier() {
     pid_t pid = fork();
     if (pid == 0) {
-        setProcessName("swimming_pool_cashier");
+        setProcessName("cashier");
         try {
             Cashier cashier;
             SignalHandler::setChildProcess();
@@ -121,7 +121,7 @@ pid_t createClientWithPossibleDependent(int &clientId) {
 
     pid_t pid = fork();
     if (pid == 0) {
-        setProcessName(std::string("swimming_pool_client_" + std::to_string(guardianId)).c_str());
+        setProcessName(std::string("client_" + std::to_string(guardianId)).c_str());
         try {
             SignalHandler::setChildProcess();
 
@@ -212,8 +212,8 @@ int main() {
         initializeIPC();
         initializeWorkingHours();
 
-        auto maintenanceThread = std::thread(&runMaintenanceThread);
         auto processesCollectorThread = std::thread(&processCollector);
+        auto maintenanceThread = std::thread(&runMaintenanceThread);
 
 
         auto poolManager = PoolManager::getInstance();
