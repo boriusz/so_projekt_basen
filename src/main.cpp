@@ -9,6 +9,7 @@
 #include <iostream>
 #include "maintenance_manager.h"
 #include "signal_handler.h"
+#include <sys/wait.h>
 
 #ifdef __APPLE__
 
