@@ -13,28 +13,19 @@
 int shmId = -1;
 int semId = -1;
 int msgId = -1;
-int lifeguardMsgId = -1;
 
 std::vector<pid_t> processes;
 std::atomic<bool> shouldRun(true);
 
 void initializeIPC() {
     semId = semget(SEM_KEY, SEM_COUNT, 0666);
-    if (semId >= 0) {
-        std::cout << "Removing existing semaphore set..." << std::endl;
-        semctl(semId, 0, IPC_RMID);
-    }
 
     semId = semget(SEM_KEY, SEM_COUNT, IPC_CREAT | IPC_EXCL | 0666);
     if (semId < 0) {
         if (errno == EEXIST) {
             semId = semget(SEM_KEY, SEM_COUNT, 0666);
         }
-        if (semId < 0) {
-            std::cerr << "semget failed with errno=" << errno
-                      << " (" << strerror(errno) << ")" << std::endl;
-            exit(1);
-        }
+        checkSystemCall(semId, "semget failed with errno=")
     }
 
     unsigned short values[SEM_COUNT];
@@ -49,11 +40,7 @@ void initializeIPC() {
     } arg{};
     arg.array = values;
 
-    if (semctl(semId, 0, SETALL, arg) == -1) {
-        std::cerr << "semctl SETALL failed with errno=" << errno
-                  << " (" << strerror(errno) << ")" << std::endl;
-        exit(1);
-    }
+    checkSystemCall(semctl(semId, 0, SETALL, arg), "semctl SETALL failed with errno=");
 
     shmId = shmget(SHM_KEY, sizeof(SharedMemory), IPC_CREAT | 0666);
     if (shmId < 0) {
@@ -63,15 +50,7 @@ void initializeIPC() {
 
     msgId = msgget(CASHIER_MSG_KEY, IPC_CREAT | 0666);
     if (msgId < 0) {
-        std::cerr << "DEBUG: msgget failed with errno=" << errno
-                  << " (" << strerror(errno) << ")" << std::endl;
-        exit(1);
-    }
-
-    lifeguardMsgId = msgget(LIFEGUARD_MSG_KEY, IPC_CREAT | 0666);
-    if (lifeguardMsgId < 0) {
-        std::cerr << "DEBUG: msgget failed with errno=" << errno
-                  << " (" << strerror(errno) << ")" << std::endl;
+        perror("msgget failed");
         exit(1);
     }
 }

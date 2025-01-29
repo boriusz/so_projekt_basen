@@ -85,7 +85,6 @@ struct ClientRequest {
 
 const key_t SHM_KEY = 6969;
 const key_t SEM_KEY = 7000;
-const key_t LIFEGUARD_MSG_KEY = ftok("./ipc_key.txt", 'L');
 const key_t CASHIER_MSG_KEY = ftok("./ipc_key.txt", 'C');
 
 

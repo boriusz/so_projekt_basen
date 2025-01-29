@@ -38,8 +38,6 @@ Client::Client(int id, int age, bool isVip, bool hasSwimDiaper, bool hasGuardian
         cashierMsgId = msgget(CASHIER_MSG_KEY, 0666);
         checkSystemCall(cashierMsgId, "msgget failed in Client");
 
-        lifeguardMsgId = msgget(LIFEGUARD_MSG_KEY, 0666);
-        checkSystemCall(lifeguardMsgId, "msgget failed in Client");
 
     } catch (const std::exception &e) {
         std::cerr << "Error creating Client: " << e.what() << std::endl;

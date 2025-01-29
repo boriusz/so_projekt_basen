@@ -22,7 +22,6 @@ private:
     Pool *currentPool;
     std::vector<Client *> dependents;
     int cashierMsgId;
-    int lifeguardMsgId;
     std::atomic<bool> shouldRun;
     std::unique_ptr<Ticket> ticket;
     bool hasEvacuated;
