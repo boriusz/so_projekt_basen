@@ -25,7 +25,7 @@ void initializeIPC() {
         if (errno == EEXIST) {
             semId = semget(SEM_KEY, SEM_COUNT, 0666);
         }
-        checkSystemCall(semId, "semget failed with errno=")
+        checkSystemCall(semId, "semget failed with errno=");
     }
 
     unsigned short values[SEM_COUNT];
