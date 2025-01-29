@@ -10,6 +10,11 @@
 
 ## Poprawiony po konsultacji
 
+Dodatkowe informacje:
+
+- projekt uruchamia się na torusie
+- projekt budowany jest za pomocą cmake (instrukcja na końcu readme)
+
 ## Założenia projektowe
 
 W pewnym miasteczku znajduje się kompleks basenów krytych dostępny w godzinach od Tp do Tk. W jego skład wchodzą:
