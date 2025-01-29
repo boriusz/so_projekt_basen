@@ -45,7 +45,7 @@ void MaintenanceManager::startMaintenance() {
             if (pools[0]->isEmpty() && pools[1]->isEmpty() && pools[2]->isEmpty()) {
                 break;
             }
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+            //std::this_thread::sleep_for(std::chrono::seconds(1));
             waitTime++;
         }
 

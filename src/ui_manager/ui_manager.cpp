@@ -155,7 +155,7 @@ void UIManager::startMonitoring() {
                 displayQueueState();
                 std::cout << "\nPress Ctrl+C to exit\n";
 
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                //std::this_thread::sleep_for(std::chrono::milliseconds(500));
             } catch (const std::exception &e) {
                 std::cerr << "Display error: " << e.what() << std::endl;
                 break;
