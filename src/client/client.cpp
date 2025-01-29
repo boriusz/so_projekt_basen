@@ -148,7 +148,7 @@ void Client::moveToAnotherPool() {
                 std::cout << "Klient szukający basenu opuszcza obiekt ze względu na przerwę techniczną" << std::endl;
                 exit(1);
             }
-            // sleep(5);
+            sleep(5);
             return;
         }
 
@@ -251,7 +251,7 @@ void Client::moveToAnotherPool() {
             if (!currentPool) {
                 retries++;
                 if (retries < 3) {
-                    // sleep(3);
+                    sleep(3);
                 }
             }
         }
@@ -293,7 +293,7 @@ void Client::handleSocketSignals() {
                 }
             }
 
-            //std::this_thread::// sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     } catch (const std::exception &e) {
         std::cout << "Klient: " << e.what() << std::endl;
@@ -334,7 +334,7 @@ void Client::run() {
                 moveToAnotherPool();
             }
 
-            // sleep(1);
+            sleep(1);
         }
 
         if (signalThread.joinable()) {
