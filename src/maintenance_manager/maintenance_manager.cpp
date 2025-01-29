@@ -19,7 +19,7 @@ void MaintenanceManager::startMaintenance() {
     maintenanceInProgress.store(true);
 
     try {
-        std::cout << "Starting facility-wide maintenance" << std::endl;
+        std::cout << "Rozpoczyna się przerwa techniczna. Klienci są proszenie o opuszczenie" << std::endl;
 
         auto poolManager = PoolManager::getInstance();
         if (!poolManager) {
@@ -49,6 +49,8 @@ void MaintenanceManager::startMaintenance() {
             waitTime++;
         }
 
+        std::cout << "Klienci opuścili obiekt, rozpoczynamy przerwę techiczną." << std::endl;
+
         if (waitTime >= MAX_WAIT_TIME) {
             throw PoolError("Timeout waiting for pools to empty");
         }
@@ -65,7 +67,7 @@ void MaintenanceManager::endMaintenance() {
         return;
     }
 
-    std::cout << "Finishing maintenance" << std::endl;
+    std::cout << "Koniec przerwy technicznej" << std::endl;
     maintenanceInProgress.store(false);
 
     auto poolManager = PoolManager::getInstance();

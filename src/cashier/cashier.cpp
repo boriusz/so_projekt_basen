@@ -58,9 +58,7 @@ void Cashier::processClient() {
         ticket.isVip = request.isVip;
         ticket.isChild = request.age < 10;
 
-        if (msgsnd(msgId, &ticket, sizeof(TicketMessage) - sizeof(long), 0) == -1) {
-            throw PoolSystemError("Failed to send ticket");
-        }
+        checkSystemCall(msgsnd(msgId, &ticket, sizeof(TicketMessage) - sizeof(long), 0), "Failed to send ticket");
 
         for (int i = 0; i < shm->entranceQueue.queueSize - 1; i++) {
             shm->entranceQueue.queue[i] = shm->entranceQueue.queue[i + 1];
@@ -89,7 +87,7 @@ void Cashier::addToQueue(const ClientRequest &request) const {
     checkSystemCall(semop(semId, &op, 1), "semop lock failed");
 
     try {
-        if (shm->entranceQueue.queueSize >= EntranceQueue::MAX_QUEUE_SIZE) {
+        if (shm->entranceQueue.queueSize >= EntranceQueue::MAX_QUEUE_SIZE - 1) {
             op.sem_op = 1;
             semop(semId, &op, 1);
             shmdt(shm);
@@ -164,6 +162,17 @@ void Cashier::run() {
                 addToQueue(request);
             } catch (const std::exception &e) {
                 std::cerr << "Error adding client to queue: " << e.what() << std::endl;
+
+                TicketMessage ticket{};
+                ticket.mtype = request.clientId;
+                ticket.clientId = request.clientId;
+                ticket.ticketId = -1;
+                ticket.validityTime = -1;
+                ticket.issueTime = -1;
+                ticket.isVip = request.isVip;
+                ticket.isChild = request.age < 10;
+
+                checkSystemCall(msgsnd(msgId, &ticket, sizeof(TicketMessage) - sizeof(long), 0), "Failed to send ticket");
             }
         }
     }

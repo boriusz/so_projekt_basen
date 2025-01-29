@@ -61,6 +61,7 @@ struct TicketMessage {
 
 const int LIFEGUARD_ACTION_EVAC = 41080;
 const int LIFEGUARD_ACTION_RETURN = 41081;
+const int LIFEGUARD_ACTION_MAINTENANCE = 41082;
 
 struct LifeguardMessage {
     enum Action {

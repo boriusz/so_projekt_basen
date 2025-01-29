@@ -14,6 +14,7 @@ class Lifeguard {
 private:
     Pool* pool;
     std::atomic<bool> poolClosed;
+    std::atomic<bool> isMaintenance;
     std::atomic<bool> isEmergency;
     int semId;
     pthread_mutex_t stateMutex;

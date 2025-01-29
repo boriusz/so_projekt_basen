@@ -73,11 +73,12 @@ void Client::waitForTicket() {
                         "Failed to send ticket request");
 
         TicketMessage ticketMsg = {};
-        ssize_t received = msgrcv(cashierMsgId, &ticketMsg, sizeof(TicketMessage) - sizeof(long),
-                                  id, 0);
 
-        if (received == -1) {
-            throw PoolSystemError("Failed to receive ticket");
+        checkSystemCall(msgrcv(cashierMsgId, &ticketMsg, sizeof(TicketMessage) - sizeof(long),
+                               id, 0), "Failed to receive ticket");
+
+        if (ticketMsg.ticketId == -1 && ticketMsg.validityTime == -1) {
+            throw PoolError("Facility queue is full, client abandoning pool");
         }
 
         if (ticketMsg.clientId != id || ticketMsg.validityTime <= 0) {
@@ -130,9 +131,8 @@ void Client::connectToPool() {
 
         int flags = fcntl(clientSocket, F_GETFL, 0);
         fcntl(clientSocket, F_SETFL, flags | O_NONBLOCK);
-
-        std::cout << "Client " << id << " connected to pool " << currentPool->getName() << std::endl;
     } catch (const std::exception &e) {
+        std::cerr << "Błąd: " << e.what() << std::endl;
         if (clientSocket != -1) {
             close(clientSocket);
             clientSocket = -1;
@@ -143,13 +143,17 @@ void Client::connectToPool() {
 
 void Client::moveToAnotherPool() {
     try {
+        auto poolManager = PoolManager::getInstance();
+
         if (!WorkingHoursManager::isOpen()) {
-            std::cout << "Client " << id << " waiting for facility to open..." << std::endl;
+            if (poolManager->getPool(Pool::PoolType::Olympic)->getState()->isUnderMaintenance) {
+                std::cout << "Klient szukający basenu opuszcza obiekt ze względu na przerwę techniczną" << std::endl;
+                exit(1);
+            }
             sleep(5);
             return;
         }
 
-        auto poolManager = PoolManager::getInstance();
         int retries = 0;
 
         while (retries < 3 && !currentPool) {
@@ -162,6 +166,9 @@ void Client::moveToAnotherPool() {
 
                 try {
                     if (childrenPool->enter(*this) && childrenPool->enter(*dependent)) {
+                        std::cout << "Klient " << this->id << " w wieku " << this->age << " oraz dziecko "
+                                  << dependent->id << " w wieku " << dependent->age << " weszli na basen "
+                                  << childrenPool->getName() << std::endl;
                         currentPool = childrenPool;
                         dependent->currentPool = childrenPool;
                     } else {
@@ -199,11 +206,17 @@ void Client::moveToAnotherPool() {
                             success = false;
                         } else {
                             dependent->currentPool = recPool;
+                            std::cout << "Klient " << this->id << " w wieku " << this->age << " oraz dziecko "
+                                      << dependent->id << " w wieku " << dependent->age << " weszli na basen "
+                                      << recPool->getName() << std::endl;
                         }
                     }
 
                     if (success) {
                         currentPool = recPool;
+                        std::cout << "Klient " << this->id << " w wieku " << this->age << " wszedł na basen "
+                                  << recPool->getName() << std::endl;
+
                     }
                 } catch (const std::exception &e) {
                     std::cerr << "Failed to connect to pool: " << e.what() << std::endl;
@@ -224,6 +237,8 @@ void Client::moveToAnotherPool() {
 
                 try {
                     if (olympicPool->enter(*this)) {
+                        std::cout << "Klient " << this->id << " w wieku " << this->age << " wszedł na basen "
+                                  << olympicPool->getName() << std::endl;
                         currentPool = olympicPool;
                     }
                 } catch (const std::exception &e) {
@@ -244,8 +259,6 @@ void Client::moveToAnotherPool() {
         }
 
         if (!currentPool) {
-            std::cout << "Client " << id << " couldn't enter any pool after " << retries
-                      << " attempts -- leaving facility" << std::endl;
             exit(0);
         }
     } catch (const std::exception &e) {
@@ -256,32 +269,37 @@ void Client::moveToAnotherPool() {
 }
 
 void Client::handleSocketSignals() {
-    while (shouldRun.load()) {
-        LifeguardMessage msg{};
-        ssize_t received = recv(
-                clientSocket,
-                &msg,
-                sizeof(msg),
-                MSG_DONTWAIT
-        );
+    try {
+        while (shouldRun.load()) {
+            LifeguardMessage msg{};
+            ssize_t received = recv(
+                    clientSocket,
+                    &msg,
+                    sizeof(msg),
+                    MSG_DONTWAIT
+            );
 
-        if (received > 0) {
-            if (msg.action == LIFEGUARD_ACTION_EVAC) {
-                std::cout << "Client " << id << " received evac signal, currentPool: " << currentPool->getName()
-                          << std::endl;
-                if (currentPool) {
-                    for (auto dependent: dependents) {
-                        dependent->leaveCurrentPool();
+            if (received > 0) {
+                if (msg.action == LIFEGUARD_ACTION_EVAC) {
+                    std::cout << "Klient " << id << " otrzymał sygnał do ewakuacji z basenu " << currentPool->getName()
+                              << std::endl;
+                    if (currentPool) {
+                        for (auto dependent: dependents) {
+                            dependent->leaveCurrentPool();
+                        }
+                        leaveCurrentPool();
                     }
+                } else if (msg.action == LIFEGUARD_ACTION_MAINTENANCE) {
                     leaveCurrentPool();
+                    throw PoolError("Basen jest w trybie konserwacji, opuszczam obiekt");
                 }
-            } else if (msg.action == LIFEGUARD_ACTION_RETURN) {
-                std::cout << "Client " << id << " received return signal for pool "
-                          << msg.poolId << std::endl;
             }
-        }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    } catch (const std::exception &e) {
+        std::cout << "Klient: " << e.what() << std::endl;
+        shouldRun.store(false);
     }
 }
 
@@ -324,6 +342,7 @@ void Client::run() {
         if (signalThread.joinable()) {
             signalThread.join();
         }
+        exit(1);
     } catch (const std::exception &e) {
         shouldRun.store(false);
         if (signalThread.joinable()) {

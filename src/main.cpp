@@ -121,7 +121,7 @@ pid_t createClientWithPossibleDependent(int &clientId) {
     }
 
     pid_t pid = fork();
-    srand(time(nullptr) ^ (pid << 16));
+    srand(guardianId);
     if (pid == 0) {
         try {
             SignalHandler::setChildProcess();
@@ -134,7 +134,7 @@ pid_t createClientWithPossibleDependent(int &clientId) {
                 age = 10 + (rand() % 60);
             }
 
-            bool isVip = (rand() % 100 < 8);
+            bool isVip = (rand() % 100 < 20);
 
             Client *client = new Client(guardianId, age, isVip);
             client->setAsGuardian(isGuardian);
@@ -169,6 +169,7 @@ void runMaintenanceThread() {
         maintenanceManager->startMaintenance();
         std::this_thread::sleep_for(std::chrono::seconds(10));
         maintenanceManager->endMaintenance();
+        std::this_thread::sleep_for(std::chrono::minutes (2));
     }
 }
 

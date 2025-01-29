@@ -29,13 +29,11 @@ void SignalHandler::setChildCleanupHandler(std::function<void()> handler) {
 void SignalHandler::cleanupIPC() {
     int cashierMsgId = msgget(CASHIER_MSG_KEY, 0666);
     if (cashierMsgId >= 0) {
-        std::cout << "Removing cashier message queue..." << std::endl;
         msgctl(cashierMsgId, IPC_RMID, nullptr);
     }
 
     int lifeguardMsgId = msgget(LIFEGUARD_MSG_KEY, 0666);
     if (lifeguardMsgId >= 0) {
-        std::cout << "Removing lifeguard message queue..." << std::endl;
         msgctl(lifeguardMsgId, IPC_RMID, nullptr);
     }
 

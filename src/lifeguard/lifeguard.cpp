@@ -9,7 +9,7 @@
 #include <csignal>
 #include <cstdlib>
 
-Lifeguard::Lifeguard(Pool *pool) : pool(pool), poolClosed(false), isEmergency(false), shouldRun(true) {
+Lifeguard::Lifeguard(Pool *pool) : pool(pool), poolClosed(false), isEmergency(false), shouldRun(true), isMaintenance(false) {
     try {
         checkSystemCall(pthread_mutex_init(&stateMutex, nullptr),
                         "Failed to initialize state mutex");
@@ -87,7 +87,7 @@ void Lifeguard::notifyClients(int action) {
                     }
                 }
             }
-        } else if (action == LIFEGUARD_ACTION_EVAC) {
+        } else if (action == LIFEGUARD_ACTION_EVAC || action == LIFEGUARD_ACTION_MAINTENANCE) {
             LifeguardMessage msg{
                     static_cast<LifeguardMessage::Action>(action),
                     static_cast<int>(pool->getType())
@@ -154,21 +154,28 @@ void Lifeguard::handleEmergency() {
 
     std::cout << "EMERGENCY: Emergency ended for pool " << pool->getName() << std::endl;
 
+    isEmergency.store(false);
+    openPool();
+
     if (!pool->isEmpty()) {
         std::cerr << "CRITICAL: Pool not empty after emergency evacuation!" << std::endl;
     }
 }
 
 void Lifeguard::closePool() {
-    std::cout << "Lifeguard: Closing pool! " << pool->getName() << std::endl;
+    if (pool->getState()->isUnderMaintenance) {
+        std::cout << "Ratownik: zamykanie basenu " << pool->getName() << " z powodu nadchodzącej konserwacji" << std::endl;
+    } else {
+        std::cout << "Ratownik: Ewakuacja basenu " << pool->getName() << "!" << std::endl;
+    }
     poolClosed.store(true);
 
     pthread_mutex_lock(&stateMutex);
     pool->getState()->isClosed = true;
     pthread_mutex_unlock(&stateMutex);
 
-    notifyClients(LIFEGUARD_ACTION_EVAC);
-    std::cout << "clients notified for pool " << pool->getName() << std::endl;
+    int action = pool->getState()->isUnderMaintenance ? LIFEGUARD_ACTION_MAINTENANCE : LIFEGUARD_ACTION_EVAC;
+    notifyClients(action);
 }
 
 void Lifeguard::openPool() {
@@ -181,8 +188,8 @@ void Lifeguard::openPool() {
         std::cout << "Cannot open pool - emergency situation active" << std::endl;
         return;
     }
+    std::cout << "Ratownik: Ponowne otwarcie " << pool->getName() << "!" << std::endl;
 
-    std::cout << "Lifeguard: Opening pool! " << pool->getName() << std::endl;
     poolClosed.store(false);
 
     pthread_mutex_lock(&stateMutex);
@@ -200,11 +207,16 @@ void Lifeguard::run() {
         while (true) {
             if (!WorkingHoursManager::isOpen()) {
                 if (!poolClosed.load()) {
-                    std::cout << "Closing pool - outside working hours" << std::endl;
+                    isMaintenance.store(true);
+                    std::cout << "Zamykamy basen!" << std::endl;
                     closePool();
                 }
-                std::this_thread::sleep_for(std::chrono::minutes(1));
+                std::this_thread::sleep_for(std::chrono::seconds (1));
                 continue;
+            }
+            if (isMaintenance && poolClosed.load()) {
+                isMaintenance.store(false);
+                openPool();
             }
 
             if (!hasGivenSomeTime) {
