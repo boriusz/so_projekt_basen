@@ -8,6 +8,8 @@
 
 **Temat: Basen**
 
+## Poprawiony po konsultacji
+
 ## Założenia projektowe
 
 W pewnym miasteczku znajduje się kompleks basenów krytych dostępny w godzinach od Tp do Tk. W jego skład wchodzą:
@@ -36,18 +38,24 @@ Zasady korzystania z basenów:
 Kod projektu składa się z kilku głównych komponentów:
 
 - [`main.cpp`](https://github.com/boriusz/so_projekt_basen/blob/main/src/main.cpp): Główny plik programu inicjalizujący
-  IPC, tworzący procesy ratowników, kasjera i klientów.
+  IPC, tworzący procesy ratowników, kasjera i klientów za pomocą dedykowanej funkcji.
 - [`client.cpp`](https://github.com/boriusz/so_projekt_basen/blob/main/src/client/client.cpp): Implementacja zachowania
-  klientów (zakup biletu, wybór basenu, reakcja na sygnały).
+  klientów, zawiera wejście na obiekt i komunikację z kasjerem, oczekuje na bilet dla siebie i swojego dziecka - `waitForTicket`
+  , a następnie szuka dla siebie i ewentualnego dziecka basenu `moveToAnotherPool`, łączy się z socketem ratownika - `connectToPool`, a następnie
+  czeka na sygnały w nowym wątku - `handleSocketSignals`
 - [`lifeguard.cpp`](https://github.com/boriusz/so_projekt_basen/blob/main/src/lifeguard/lifeguard.cpp): Obsługa
   ratowników nadzorujących baseny i wysyłających sygnały ewakuacji.
+  Tworzy serwer do socketów - `setupSocketServer`, w pętli akceptuje nowych klientów - `acceptClientLoop`, 
+  a także w metodzie `run` sprawdza aktualny stan basenu, oraz na podstawie losowania, wybiera czy zamknąć dany basen `closePool` a następnie otworzyć `openPool`
 - [`cashier.cpp`](https://github.com/boriusz/so_projekt_basen/blob/main/src/cashier/cashier.cpp): System sprzedaży
-  biletów i zarządzania kolejką.
+  biletów i zarządzania kolejką. Kasjer pracuje w pętli w metodzie `run`, gdzie czeka na nowych klientów, których następnie ustawia w kolejce `addToQueue`.
+  W osobnym wątku `processQueueLoop` pobiera kolejnego klienta z kolejki którego obsługuje `processClient` i wysyła bilet
 - [`pool.cpp`](https://github.com/boriusz/so_projekt_basen/blob/main/src/pool/pool.cpp): Implementacja logiki basenów (
-  wejścia/wyjścia, limity wiekowe).
+  wejścia/wyjścia, limity wiekowe). Klient może wejść do basenu `enter`, gdzie znajduje się logika sprawdzania np. średniej wieku. Z basenu klient może potem wyjść metodą `leave`. 
+  Basen jest także kontrolowany za pomocą metod `closeForMaintenance` oraz `reopenAfterMaintenance`
 - [
   `maintenance_manager.cpp`](https://github.com/boriusz/so_projekt_basen/blob/main/src/maintenance_manager/maintenance_manager.cpp):
-  Zarządzanie konserwacją obiektu.
+  Zarządzanie konserwacją obiektu. Okresowo zamyka i otwiera obiekt `startMaintenance`/`endMaintenance`
 - [`ui_manager.cpp`](https://github.com/boriusz/so_projekt_basen/blob/main/src/ui_manager/ui_manager.cpp): Interfejs
   użytkownika i wizualizacja stanu systemu.
 
